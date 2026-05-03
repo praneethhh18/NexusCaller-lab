@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Vox · Live call</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg:        #0b0d10;
+    --surface:   #14171c;
+    --surface-1: #1b1f26;
+    --border:    #2a2f3a;
+    --accent:    #6ea5ff;
+    --accent-soft: #2a3a55;
+    --good:      #4ade80;
+    --warn:      #fbbf24;
+    --bad:       #f87171;
+    --muted:     #8893a3;
+    --dim:       #5b6473;
+    --text:      #d6dbe3;
+    --r-md:      8px;
+    --r-lg:      14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 0; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+  header { padding: 18px 28px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--surface); }
+  header .title { font-size: 13px; letter-spacing: 0.4px; color: var(--muted); }
+  header .title b { color: var(--text); margin-right: 8px; font-weight: 600; }
+  header .who { font-size: 18px; font-weight: 600; }
+  .state-sub { font-size: 12px; color: var(--muted); }
+
+  main { flex: 1; display: grid; grid-template-columns: 320px 1fr; gap: 0; overflow: hidden; }
+  .left { border-right: 1px solid var(--border); padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: var(--surface); overflow-y: auto; }
+  .right { padding: 24px 28px; overflow-y: auto; }
+
+  .orb {
+    width: 180px; height: 180px; border-radius: 50%; margin-top: 12px;
+    background: radial-gradient(circle at 30% 30%,
+      color-mix(in srgb, var(--accent) 70%, transparent),
+      color-mix(in srgb, var(--accent) 20%, transparent) 60%, transparent 80%);
+    box-shadow: 0 0 60px color-mix(in srgb, var(--accent) 30%, transparent);
+    animation: idle 3s ease-in-out infinite; transition: background 400ms;
+  }
+  .orb.connecting { animation: pulse 1.2s ease-in-out infinite; }
+  .orb.active     { animation: pulse 0.9s ease-in-out infinite; }
+  .orb.ended { animation: none;
+    background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--muted) 50%, transparent), color-mix(in srgb, var(--muted) 15%, transparent) 60%, transparent 80%);
+    box-shadow: 0 0 30px color-mix(in srgb, var(--muted) 20%, transparent); }
+  @keyframes idle  { 0%,100%{transform:scale(1)}50%{transform:scale(1.04)} }
+  @keyframes pulse { 0%,100%{transform:scale(1)}50%{transform:scale(1.10)} }
+
+  .state-label { font-size: 16px; font-weight: 600; text-align: center; margin-top: 8px; }
+  .state-sub-c { font-size: 12px; color: var(--muted); text-align: center; margin-top: -8px; }
+
+  .meta { width: 100%; }
+  .meta .row { display: flex; justify-content: space-between; padding: 8px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .meta .row:last-child { border-bottom: none; }
+  .meta .row span:first-child { color: var(--muted); }
+
+  h2.section { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 0 0 14px; }
+  .transcript { display: flex; flex-direction: column; gap: 10px; }
+  .bubble { padding: 12px 16px; border-radius: var(--r-md); font-size: 14px; line-height: 1.5; max-width: 78%; animation: fade-in 220ms ease both; }
+  .bubble.user { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent); align-self: flex-end; }
+  .bubble.assistant { background: var(--surface-1); border: 1px solid var(--border); align-self: flex-start; }
+  .bubble-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--dim); margin-bottom: 4px; }
+  .empty { color: var(--dim); font-size: 13px; text-align: center; padding: 32px 0; }
+  @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .summary { margin-top: 30px; padding: 20px; background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--r-lg); }
+  .summary h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 0 0 16px; }
+  .summary .headline { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--text); }
+  .summary .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .chip { padding: 10px 12px; border-radius: var(--r-md); background: var(--bg); border: 1px solid var(--border); }
+  .chip .k { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 4px; }
+  .chip .v { font-size: 14px; font-weight: 600; }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge.qualified, .badge.hot, .badge.positive { background: rgba(74,222,128,.15); color: var(--good); }
+  .badge.follow_up_needed, .badge.warm, .badge.neutral { background: rgba(251,191,36,.15); color: var(--warn); }
+  .badge.not_interested, .badge.cold, .badge.negative,
+  .badge.no_answer, .badge.voicemail, .badge.wrong_number, .badge.call_failed,
+  .badge.none, .badge.unclear { background: rgba(248,113,113,.15); color: var(--bad); }
+
+  .summary .pts li { margin: 6px 0; font-size: 13px; }
+  .summary .next { margin-top: 12px; padding: 12px 14px; background: color-mix(in srgb, var(--accent) 10%, transparent); border-left: 3px solid var(--accent); border-radius: 4px; font-size: 13px; }
+  .summary .next b { text-transform: uppercase; font-size: 10px; letter-spacing: 0.6px; color: var(--accent); display: block; margin-bottom: 2px; }
+  .summary .objections { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .summary .objections span { padding: 3px 9px; font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="title"><b>📞 Vox</b><span>Live call cockpit · LiveKit</span></div>
+    <div class="who" id="who">Connecting…</div>
+  </div>
+  <div class="state-sub" id="call-id">__CALL_ID__</div>
+</header>
+
+<main>
+  <aside class="left">
+    <div class="orb" id="orb"></div>
+    <div class="state-label" id="state">Connecting…</div>
+    <div class="state-sub-c" id="state-sub">Waiting for the call to start.</div>
+
+    <div class="meta">
+      <div class="row"><span>Contact</span><span id="m-contact">—</span></div>
+      <div class="row"><span>Business</span><span id="m-biz">—</span></div>
+      <div class="row"><span>Agent</span><span id="m-agent">Vox</span></div>
+      <div class="row"><span>Duration</span><span id="m-dur">—</span></div>
+      <div class="row"><span>Turns</span><span id="m-turns">0</span></div>
+    </div>
+  </aside>
+
+  <section class="right">
+    <h2 class="section">Live Transcript</h2>
+    <div class="transcript" id="tx">
+      <div class="empty" id="empty">Waiting for the conversation to start…</div>
+    </div>
+    <div id="summary-slot"></div>
+  </section>
+</main>
+
+<!-- LiveKit JS SDK loaded from CDN. -->
+<script src="https://cdn.jsdelivr.net/npm/livekit-client@2/dist/livekit-client.umd.min.js"></script>
+<script>
+const CALL_ID = "__CALL_ID__";
+const $ = (s) => document.querySelector(s);
+const tx = $('#tx'), empty = $('#empty');
+const orb = $('#orb'), stateEl = $('#state'), stateSub = $('#state-sub');
+let started = null, turns = 0, durTimer = null;
+
+let summaryShown = false;
+function setState(s, sub) {
+  orb.className = 'orb ' + s;
+  stateEl.textContent = ({ connecting:'Connecting…', connected:'Live', active:'Live', ended:'Call ended' })[s] || s;
+  if (sub) stateSub.textContent = sub;
+  if (s === 'connected' || s === 'active') {
+    started = started || Date.now();
+    if (!durTimer) durTimer = setInterval(updateDuration, 1000);
+  }
+  if (s === 'ended') {
+    if (durTimer) { clearInterval(durTimer); durTimer = null; }
+    // Live "summary" data event may have been missed if it fired after the
+    // room disconnected. Fall back to polling /api/calls/{id}/summary.
+    // The agent's shutdown handler always writes the summary file, so
+    // this catches even the cases where the live broadcast didn't reach us.
+    if (!summaryShown) fetchSummaryFallback();
+  }
+}
+
+async function fetchSummaryFallback() {
+  // Wait a bit so the agent has time to finish its shutdown handler
+  // (Groq summarization takes ~1-3s). Then poll for up to 20s.
+  await new Promise(r => setTimeout(r, 2500));
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const r = await fetch(`/api/calls/${CALL_ID}/summary`);
+      if (r.ok) {
+        const data = await r.json();
+        if (data.summary && data.summary.headline) {
+          renderSummary(data.summary);
+          // If transcript was also written and we missed any turns
+          // (cockpit opened mid-call), backfill them now.
+          if ((data.turns || []).length && tx.children.length <= turns) {
+            // We have all turns already (matched count), skip.
+          }
+          return;
+        }
+      }
+    } catch (e) { /* retry */ }
+    await new Promise(r => setTimeout(r, 2000));
+  }
+}
+function updateDuration() {
+  if (!started) return;
+  const s = Math.floor((Date.now() - started) / 1000);
+  $('#m-dur').textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function addTurn(role, text) {
+  if (empty) empty.remove();
+  const el = document.createElement('div');
+  el.className = `bubble ${role === 'user' ? 'user' : 'assistant'}`;
+  el.innerHTML = `<div class="bubble-label">${role === 'user' ? 'caller' : 'vox'}</div>${escapeHtml(text)}`;
+  tx.appendChild(el); tx.scrollTop = tx.scrollHeight;
+  turns++; $('#m-turns').textContent = turns;
+}
+function renderSummary(s) {
+  if (!s) return;
+  summaryShown = true;
+  const slot = $('#summary-slot');
+  const o = (s.objections || []).map(x => `<span>${escapeHtml(x)}</span>`).join('');
+  const points = (s.key_points || []).map(p => `<li>${escapeHtml(p)}</li>`).join('');
+  slot.innerHTML = `
+    <div class="summary">
+      <h2>Call summary</h2>
+      <div class="headline">${escapeHtml(s.headline || '—')}</div>
+      <div class="grid">
+        <div class="chip"><div class="k">Outcome</div><div class="v"><span class="badge ${escapeHtml(s.outcome||'unclear')}">${escapeHtml(s.outcome||'—')}</span></div></div>
+        <div class="chip"><div class="k">Lead score</div><div class="v">${s.lead_score ?? '—'}<small style="color:var(--muted);font-weight:400;font-size:12px"> / 100</small></div></div>
+        <div class="chip"><div class="k">Interest</div><div class="v"><span class="badge ${escapeHtml(s.interest_level||'none')}">${escapeHtml(s.interest_level||'—')}</span></div></div>
+        <div class="chip"><div class="k">Sentiment</div><div class="v"><span class="badge ${escapeHtml(s.sentiment||'neutral')}">${escapeHtml(s.sentiment||'—')}</span></div></div>
+      </div>
+      ${points ? `<h2 style="margin-top:16px">Key points</h2><ul class="pts">${points}</ul>` : ''}
+      ${o ? `<div class="objections">${o}</div>` : ''}
+      ${s.next_step ? `<div class="next"><b>Next step</b>${escapeHtml(s.next_step)}</div>` : ''}
+      ${s.callback_requested_at ? `<div class="next" style="margin-top:8px"><b>Callback at</b>${escapeHtml(s.callback_requested_at)}</div>` : ''}
+    </div>`;
+}
+
+function handleEvent(evt) {
+  if (evt.type === 'state') {
+    setState(evt.state,
+      evt.state === 'ended' ? 'Hung up.' :
+      evt.state === 'connected' ? 'Caller is on the line.' :
+      evt.state === 'connecting' ? 'Ringing…' : '');
+    if (evt.contact_name)  { $('#who').textContent = evt.contact_name; $('#m-contact').textContent = evt.contact_name; }
+    if (evt.business_name) $('#m-biz').textContent = evt.business_name;
+    if (evt.agent_name)    $('#m-agent').textContent = evt.agent_name;
+  } else if (evt.type === 'turn') {
+    addTurn(evt.role, evt.text);
+  } else if (evt.type === 'summary') {
+    renderSummary(evt.summary);
+  }
+}
+
+(async () => {
+  // 1. Fetch a subscribe-only token for THIS call's room.
+  const tokenRes = await fetch(`/api/cockpit-token/${CALL_ID}`);
+  if (!tokenRes.ok) { setState('ended', 'Could not fetch token.'); return; }
+  const { token, url, room: roomName } = await tokenRes.json();
+
+  // 2. Connect to LiveKit room as a viewer.
+  const room = new LivekitClient.Room({ adaptiveStream: false, dynacast: false });
+
+  room.on(LivekitClient.RoomEvent.Disconnected, () => setState('ended', 'Disconnected.'));
+
+  room.on(LivekitClient.RoomEvent.DataReceived, (payload) => {
+    try {
+      const txt = new TextDecoder().decode(payload);
+      handleEvent(JSON.parse(txt));
+    } catch (e) { console.warn('bad data event', e); }
+  });
+
+  // Caller joined — show "Live".
+  room.on(LivekitClient.RoomEvent.ParticipantConnected, (p) => {
+    if (p.identity.startsWith('caller-')) setState('active', 'Caller is on the line.');
+  });
+
+  // Caller (or agent) disconnected — call is over. We mark the cockpit
+  // as ended even if the agent's "ended" data event didn't reach us in
+  // time (which happens when the room gets torn down very fast).
+  room.on(LivekitClient.RoomEvent.ParticipantDisconnected, (p) => {
+    if (p.identity.startsWith('caller-')) {
+      setState('ended', 'Caller hung up.');
+    } else if (p.identity.startsWith('agent-') || p.kind === LivekitClient.ParticipantKind.AGENT) {
+      setState('ended', 'Agent left the room.');
+    }
+  });
+
+  setState('connecting', 'Connecting to LiveKit…');
+  try {
+    await room.connect(url, token);
+
+    // Late-join: if the caller is ALREADY in the room when we connect,
+    // ParticipantConnected won't fire for them. Check the existing list.
+    const callerAlreadyHere = Array.from(room.remoteParticipants.values())
+      .some(p => p.identity.startsWith('caller-'));
+    if (callerAlreadyHere) {
+      setState('active', 'Caller is on the line.');
+    } else {
+      setState('connecting', 'Joined room — waiting for caller.');
+    }
+  } catch (e) {
+    console.error(e);
+    setState('ended', `Connect failed: ${e.message || e}`);
+  }
+})();
+</script>
+</body>
+</html>

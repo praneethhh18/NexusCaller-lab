@@ -1,0 +1,39 @@
+# Secrets
+.env
+.env.local
+*.key
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Logs
+*.log
+server.err.log
+server.out.log
+
+# IDE
+.vscode/
+.idea/
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Model caches that may sit alongside the project
+*.onnx
+*.onnx.json
+.cache/
+
+# Per-call transcripts (operator-private)
+voice_agent/transcripts/
+
+# Auto-generated
+node_modules/
+dist/
+build/

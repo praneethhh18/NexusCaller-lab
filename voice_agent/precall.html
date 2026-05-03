@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Vox · Configure call</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg:        #0b0d10;
+    --surface:   #14171c;
+    --surface-1: #1b1f26;
+    --surface-2: #232932;
+    --border:    #2a2f3a;
+    --border-strong: #3a414d;
+    --accent:    #6ea5ff;
+    --accent-soft: #2a3a55;
+    --good:      #4ade80;
+    --warn:      #fbbf24;
+    --bad:       #f87171;
+    --muted:     #8893a3;
+    --dim:       #5b6473;
+    --text:      #d6dbe3;
+    --r-md:      8px;
+    --r-lg:      14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 0;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  main {
+    width: 100%; max-width: 720px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    box-shadow: 0 20px 80px rgba(0,0,0,.4);
+  }
+  header {
+    padding: 20px 24px; border-bottom: 1px solid var(--border);
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+
+  .body { padding: 24px; }
+
+  .field { margin-bottom: 18px; }
+  .field-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.6px; color: var(--dim); margin-bottom: 6px;
+  }
+  .field-value {
+    padding: 10px 12px;
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    font-size: 14px;
+  }
+  .field-value.editable {
+    background: var(--bg);
+  }
+  input.field-input, select.field-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--r-md);
+    color: var(--text);
+    font-size: 13.5px;
+    font-family: inherit;
+    outline: none;
+  }
+  input.field-input:focus, select.field-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 18%, transparent);
+  }
+
+  /* Combos */
+  .combos {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; margin-bottom: 8px;
+  }
+  .combo {
+    appearance: none; cursor: pointer; text-align: left;
+    padding: 14px;
+    background: var(--surface-1);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-md);
+    font: inherit; color: inherit;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: border-color 120ms, background 120ms;
+  }
+  .combo:hover { border-color: var(--border-strong); }
+  .combo.selected {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
+  }
+  .combo .name { font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .combo .badge {
+    font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    padding: 2px 7px; border-radius: 10px;
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    color: var(--accent);
+  }
+  .combo .desc { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+
+  .combo.custom .name::before { content: "⚙ "; }
+
+  details.custom-stack {
+    margin-top: 12px;
+    padding: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+  }
+  details.custom-stack summary {
+    cursor: pointer; font-size: 12px; color: var(--accent);
+    list-style: none; user-select: none;
+  }
+  details.custom-stack summary::after { content: " ▾"; font-size: 10px; }
+  details.custom-stack[open] summary::after { content: " ▴"; }
+  details.custom-stack .picks {
+    margin-top: 12px;
+    display: grid; grid-template-columns: 1fr; gap: 10px;
+  }
+
+  footer {
+    padding: 14px 24px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    background: var(--surface-1);
+  }
+  .err { color: var(--bad); font-size: 12px; flex: 1; }
+  button.primary {
+    appearance: none; cursor: pointer;
+    padding: 10px 18px;
+    background: var(--accent);
+    color: #0b0d10; font-weight: 600;
+    border: none; border-radius: var(--r-md);
+    font-size: 13.5px;
+  }
+  button.primary:disabled {
+    opacity: 0.5; cursor: not-allowed;
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.1); }
+  button.ghost {
+    appearance: none; cursor: pointer;
+    padding: 10px 14px;
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    font-size: 13px;
+  }
+
+  .hint {
+    font-size: 11px; color: var(--dim); margin-top: 6px;
+  }
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <h1>📞 Configure call</h1>
+    <p id="who">Loading contact…</p>
+  </header>
+
+  <div class="body">
+    <div class="field">
+      <div class="field-label">Phone</div>
+      <div class="field-value" id="phone">—</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Purpose</div>
+      <input class="field-input" id="purpose"
+             placeholder="e.g. checking interest after demo" />
+      <div class="hint">Vox uses this to set the goal of the conversation.</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Stack — pick a combo</div>
+      <div class="combos" id="combos"></div>
+
+      <details class="custom-stack" id="custom-block">
+        <summary>Customize stack manually</summary>
+        <div class="picks">
+          <div class="field" style="margin-bottom:0">
+            <div class="field-label">STT — speech to text</div>
+            <select class="field-input" id="stt"></select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <div class="field-label">LLM — language model</div>
+            <select class="field-input" id="llm"></select>
+          </div>
+          <div class="field" style="margin-bottom:0">
+            <div class="field-label">TTS — text to speech</div>
+            <select class="field-input" id="tts"></select>
+          </div>
+          <div class="hint">Manual picks override the selected combo.</div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <footer>
+    <div class="err" id="err"></div>
+    <button class="ghost" id="cancel">Cancel</button>
+    <button class="primary" id="dial">📞 Place call</button>
+  </footer>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+// 1. Read pre-filled call payload from the URL.
+//    The CRM passes ?p=<base64(JSON)> with phone, contact_id, etc.
+let payload = {};
+try {
+  const u = new URL(location.href);
+  const enc = u.searchParams.get("p");
+  if (enc) payload = JSON.parse(atob(enc));
+} catch (e) {
+  console.warn("Could not decode payload", e);
+}
+
+// 2. Render the contact info that's locked.
+$('#who').textContent = payload.contact_name
+  ? `Calling ${payload.contact_name} on behalf of ${payload.business_name || 'Nexus'}`
+  : 'Configure your call';
+$('#phone').textContent = payload.phone || '—';
+$('#purpose').value = payload.purpose || 'a quick check-in';
+
+// 3. Pull the catalog (combos + dropdown options).
+let chosenCombo = null;
+let catalog = { combos: [], stt: [], llm: [], tts: [] };
+
+async function loadCatalog() {
+  const r = await fetch('/api/catalog');
+  catalog = await r.json();
+  renderCombos();
+  fillDropdown('#stt', catalog.stt);
+  fillDropdown('#llm', catalog.llm);
+  fillDropdown('#tts', catalog.tts);
+  // Default-select the first combo (the "default" one).
+  if (catalog.combos.length) selectCombo(catalog.combos[0].key);
+}
+
+function fillDropdown(sel, entries) {
+  const node = $(sel);
+  node.innerHTML = '';
+  // Group by .group like the lab UI does.
+  const byGroup = {};
+  for (const e of entries) {
+    (byGroup[e.group || 'Other'] = byGroup[e.group || 'Other'] || []).push(e);
+  }
+  for (const g of Object.keys(byGroup).sort()) {
+    const og = document.createElement('optgroup');
+    og.label = g;
+    for (const e of byGroup[g]) {
+      const o = document.createElement('option');
+      o.value = e.key;
+      o.textContent = e.label;
+      og.appendChild(o);
+    }
+    node.appendChild(og);
+  }
+}
+
+function renderCombos() {
+  const c = $('#combos');
+  c.innerHTML = '';
+  for (const combo of catalog.combos) {
+    const btn = document.createElement('button');
+    btn.className = 'combo';
+    btn.dataset.key = combo.key;
+    btn.innerHTML = `
+      <div class="name">${combo.label}${combo.badge ? `<span class="badge">${combo.badge}</span>` : ''}</div>
+      <div class="desc">${combo.description}</div>
+    `;
+    btn.onclick = () => selectCombo(combo.key);
+    c.appendChild(btn);
+  }
+}
+
+function selectCombo(key) {
+  chosenCombo = catalog.combos.find(c => c.key === key);
+  if (!chosenCombo) return;
+  document.querySelectorAll('.combo').forEach(b => {
+    b.classList.toggle('selected', b.dataset.key === key);
+  });
+  // Mirror to the dropdowns so manual customization shows the current pick.
+  $('#stt').value = chosenCombo.stt;
+  $('#llm').value = chosenCombo.llm;
+  $('#tts').value = chosenCombo.tts;
+}
+
+loadCatalog();
+
+// 4. Dial.
+$('#cancel').onclick = () => window.close();
+
+$('#dial').onclick = async () => {
+  $('#err').textContent = '';
+  $('#dial').disabled = true;
+  $('#dial').textContent = 'Placing call…';
+
+  const body = {
+    ...payload,
+    purpose: $('#purpose').value.trim() || payload.purpose || 'a quick check-in',
+    stt: $('#stt').value,
+    llm: $('#llm').value,
+    tts: $('#tts').value,
+    combo: chosenCombo ? chosenCombo.key : '',
+  };
+
+  try {
+    const r = await fetch('/api/dial', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok || !data.ok) throw new Error(data.error || `HTTP ${r.status}`);
+    // Open the cockpit in this same tab — operator now watches the call live.
+    location.href = data.watch_url;
+  } catch (e) {
+    $('#err').textContent = String(e.message || e);
+    $('#dial').disabled = false;
+    $('#dial').textContent = '📞 Place call';
+  }
+};
+</script>
+
+</body>
+</html>
