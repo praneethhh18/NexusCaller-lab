@@ -70,6 +70,13 @@ def _build_stt(key: str, *, keyterms: list[str] | None = None):
             api_key=os.getenv("GROQ_API_KEY"),
             **({"prompt": prompt} if prompt else {}),
         )
+    if key.startswith("local-whisper-"):
+        # faster-whisper on CPU. Model name is the part after the prefix
+        # (e.g. "tiny", "base", "small"). int8 compute keeps it usable on
+        # a laptop CPU without a GPU.
+        from voice_agent.local_plugins import LocalWhisperSTT
+        model = key.removeprefix("local-whisper-")
+        return LocalWhisperSTT(model=model)
     raise ValueError(f"Unknown STT key: {key!r}")
 
 
@@ -83,6 +90,14 @@ def _build_llm(key: str):
             model=model,
             base_url="https://api.groq.com/openai/v1",
             api_key=os.getenv("GROQ_API_KEY"),
+        )
+    if key.startswith("ollama-"):
+        # Ollama exposes an OpenAI-compatible endpoint at /v1. with_ollama is
+        # a thin convenience wrapper. Default base_url is http://localhost:11434/v1.
+        model = key.removeprefix("ollama-")
+        return openai.LLM.with_ollama(
+            model=model,
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
         )
     raise ValueError(f"Unknown LLM key: {key!r}")
 
@@ -102,6 +117,19 @@ def _build_tts(key: str):
             voice=os.getenv("CARTESIA_VOICE_ID", "f786b574-daa5-4673-aa0c-cbe3e8534c02"),
             model=model,
         )
+    if key.startswith("kokoro-"):
+        # Local Kokoro-82M ONNX. Voice name is the part after the prefix
+        # (e.g. "af_bella", "af_sarah"). First call downloads ~150MB of weights.
+        from voice_agent.local_plugins import KokoroTTS
+        voice = key.removeprefix("kokoro-")
+        return KokoroTTS(voice=voice)
+    if key.startswith("piper-"):
+        # Piper TTS via ONNX Runtime. Voice name is the part after the prefix
+        # (e.g. "en_US-lessac-medium", "en_US-ryan-high"). ~30-60 MB per voice,
+        # real-time capable on CPU. Preferred for the local-oss combo.
+        from voice_agent.local_plugins import PiperTTS
+        voice = key.removeprefix("piper-")
+        return PiperTTS(voice=voice)
     raise ValueError(f"Unknown TTS key: {key!r}")
 
 
@@ -272,9 +300,13 @@ async def entrypoint(ctx: JobContext):
 
     @session.on("conversation_item_added")
     def _on_item(event):
+        # `event.item` can be a chat message OR a control object like
+        # AgentHandoff — only chat messages have role/text_content.
         item = event.item
-        if item.role == "assistant" and item.text_content:
-            _record_and_broadcast("assistant", item.text_content)
+        role = getattr(item, "role", None)
+        text = getattr(item, "text_content", None)
+        if role == "assistant" and text:
+            _record_and_broadcast("assistant", text)
 
     # Push initial state event so the cockpit shows "live".
     asyncio.create_task(
@@ -456,5 +488,43 @@ async def _post_callback(url: str, payload: dict, *, attempts: int = 3) -> None:
     logger.error(f"[callback] all {attempts} attempts failed for {url}")
 
 
+def prewarm(proc):
+    """
+    Runs once per worker process at boot, BEFORE any job is dispatched.
+    We use it to (a) load Silero VAD weights into shared memory and
+    (b) trigger the local-OSS model downloads + ONNX session warmup so
+    the very first call doesn't sit in dead silence while ~150 MB of
+    Kokoro weights stream from GitHub.
+
+    Pre-warm runs in a separate process from the call entrypoint, so
+    "loaded" here means "files are on disk". The actual ONNX session is
+    re-instantiated in the call process — but that's a 2-3 s init from
+    a local file, not a 60+ s download.
+    """
+    proc.userdata["vad"] = silero.VAD.load()
+
+    if os.getenv("LOCAL_OSS_PREWARM", "1") != "0":
+        try:
+            from voice_agent.local_plugins import (
+                LocalWhisperSTT, PiperTTS, _ensure_piper_voice,
+            )
+            logger.info("[prewarm] downloading Piper voice files (one-time, ~30MB)…")
+            _ensure_piper_voice("en_US-lessac-medium")
+            logger.info("[prewarm] loading Piper ONNX session…")
+            piper = PiperTTS(voice="en_US-lessac-medium")
+            piper._ensure_model()
+            logger.info("[prewarm] loading faster-whisper tiny weights…")
+            stt = LocalWhisperSTT(model="tiny")
+            stt._ensure_model()
+            logger.info("[prewarm] local OSS stack ready")
+        except Exception as e:
+            # Don't kill the worker if local-stack prewarm fails —
+            # cloud combos still work without these models.
+            logger.warning(f"[prewarm] local OSS prewarm skipped: {e}")
+
+
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint))
+    cli.run_app(WorkerOptions(
+        entrypoint_fnc=entrypoint,
+        prewarm_fnc=prewarm,
+    ))

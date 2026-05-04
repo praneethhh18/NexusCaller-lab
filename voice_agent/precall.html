@@ -158,6 +158,39 @@
   .hint {
     font-size: 11px; color: var(--dim); margin-top: 6px;
   }
+
+  /* Telephony selector */
+  .telephony-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .tp {
+    appearance: none; cursor: pointer; text-align: left;
+    padding: 10px 12px;
+    background: var(--surface-1);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-md);
+    font: inherit; color: inherit;
+    display: flex; flex-direction: column; gap: 2px;
+    transition: border-color 120ms, background 120ms;
+  }
+  .tp:hover:not(:disabled) { border-color: var(--border-strong); }
+  .tp.selected {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
+  }
+  .tp:disabled { opacity: 0.38; cursor: not-allowed; }
+  .tp .tp-name {
+    font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .tp .tp-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--good); display: inline-block; flex-shrink: 0;
+  }
+  .tp:disabled .tp-dot { background: var(--dim); }
+  .tp .tp-desc { font-size: 10.5px; color: var(--muted); line-height: 1.4; }
+  .tp:disabled .tp-desc::after { content: " · not configured"; color: var(--bad); }
 </style>
 </head>
 <body>
@@ -179,6 +212,12 @@
       <input class="field-input" id="purpose"
              placeholder="e.g. checking interest after demo" />
       <div class="hint">Vox uses this to set the goal of the conversation.</div>
+    </div>
+
+    <div class="field">
+      <div class="field-label">Telephony provider</div>
+      <div class="telephony-grid" id="telephony-grid"></div>
+      <div class="hint">All providers use the same LiveKit audio bridge. Only the PSTN leg differs.</div>
     </div>
 
     <div class="field">
@@ -234,19 +273,49 @@ $('#who').textContent = payload.contact_name
 $('#phone').textContent = payload.phone || '—';
 $('#purpose').value = payload.purpose || 'a quick check-in';
 
-// 3. Pull the catalog (combos + dropdown options).
-let chosenCombo = null;
-let catalog = { combos: [], stt: [], llm: [], tts: [] };
+// 3. Pull the catalog (combos + dropdown options + telephony providers).
+let chosenCombo    = null;
+let chosenProvider = 'twilio';
+let catalog = { combos: [], stt: [], llm: [], tts: [], telephony: [] };
 
 async function loadCatalog() {
   const r = await fetch('/api/catalog');
   catalog = await r.json();
+  renderTelephony();
   renderCombos();
   fillDropdown('#stt', catalog.stt);
   fillDropdown('#llm', catalog.llm);
   fillDropdown('#tts', catalog.tts);
-  // Default-select the first combo (the "default" one).
   if (catalog.combos.length) selectCombo(catalog.combos[0].key);
+}
+
+function renderTelephony() {
+  const grid = $('#telephony-grid');
+  grid.innerHTML = '';
+  const providers = catalog.telephony || [];
+  // Auto-select first configured provider
+  const firstConfigured = providers.find(p => p.configured);
+  if (firstConfigured) chosenProvider = firstConfigured.key;
+
+  for (const p of providers) {
+    const btn = document.createElement('button');
+    btn.className = 'tp' + (p.key === chosenProvider ? ' selected' : '');
+    btn.disabled = !p.configured;
+    btn.dataset.key = p.key;
+    btn.innerHTML = `
+      <div class="tp-name">
+        <span class="tp-dot"></span>${p.label}
+      </div>
+      <div class="tp-desc">${p.desc}</div>
+    `;
+    btn.onclick = () => {
+      chosenProvider = p.key;
+      document.querySelectorAll('.tp').forEach(b =>
+        b.classList.toggle('selected', b.dataset.key === p.key)
+      );
+    };
+    grid.appendChild(btn);
+  }
 }
 
 function fillDropdown(sel, entries) {
@@ -315,6 +384,7 @@ $('#dial').onclick = async () => {
     llm: $('#llm').value,
     tts: $('#tts').value,
     combo: chosenCombo ? chosenCombo.key : '',
+    telephony_provider: chosenProvider,
   };
 
   try {

@@ -5,10 +5,12 @@ Each combo is a (label, stt, llm, tts) tuple where the keys are what the
 LiveKit Agent's plugin builder understands:
 
     STT keys: deepgram-nova-3 | deepgram-nova-2 | groq-whisper-large-v3-turbo
+              | local-whisper-tiny | local-whisper-base
     LLM keys: groq-llama-3.1-8b-instant | groq-llama-3.3-70b-versatile
-              | groq-openai/gpt-oss-120b
+              | groq-openai/gpt-oss-120b | ollama-qwen2.5:0.5b-instruct
     TTS keys: elevenlabs-eleven_turbo_v2_5 | elevenlabs-eleven_flash_v2_5
               | cartesia-sonic-3 | cartesia-sonic-turbo
+              | piper-en_US-lessac-medium | kokoro-af_bella
 """
 from __future__ import annotations
 
@@ -54,6 +56,15 @@ PRESETS: list[Combo] = [
         tts="cartesia-sonic-3",
         badge="natural voice",
     ),
+    Combo(
+        key="local-oss",
+        label="Local OSS (CPU)",
+        description="Whisper tiny · Qwen2.5 0.5B (Ollama) · Piper. Fully offline STT/LLM/TTS, real-time on CPU.",
+        stt="local-whisper-tiny",
+        llm="ollama-qwen2.5:0.5b-instruct",
+        tts="piper-en_US-lessac-medium",
+        badge="offline",
+    ),
 ]
 
 
@@ -67,6 +78,10 @@ STT_OPTIONS = [
      "group": "Cloud — Deepgram"},
     {"key": "deepgram-nova-2",             "label": "Deepgram · Nova-2",
      "group": "Cloud — Deepgram"},
+    {"key": "local-whisper-tiny",          "label": "Local · Whisper tiny  (CPU, offline)",
+     "group": "Local — OSS"},
+    {"key": "local-whisper-base",          "label": "Local · Whisper base  (CPU, slower, more accurate)",
+     "group": "Local — OSS"},
 ]
 
 LLM_OPTIONS = [
@@ -80,6 +95,12 @@ LLM_OPTIONS = [
      "group": "Cloud — Groq"},
     {"key": "groq-meta-llama/llama-4-scout-17b-16e-instruct", "label": "Groq · Llama 4 Scout 17B",
      "group": "Cloud — Groq"},
+    {"key": "ollama-qwen2.5:0.5b-instruct",      "label": "Ollama · Qwen2.5 0.5B Instruct  (CPU, offline)",
+     "group": "Local — OSS"},
+    {"key": "ollama-qwen2.5:1.5b-instruct",      "label": "Ollama · Qwen2.5 1.5B Instruct  (better quality, slower)",
+     "group": "Local — OSS"},
+    {"key": "ollama-llama3.2:1b",                "label": "Ollama · Llama 3.2 1B",
+     "group": "Local — OSS"},
 ]
 
 TTS_OPTIONS = [
@@ -93,6 +114,18 @@ TTS_OPTIONS = [
      "group": "Cloud — Cartesia"},
     {"key": "cartesia-sonic-turbo",           "label": "Cartesia · Sonic Turbo (lowest latency)",
      "group": "Cloud — Cartesia"},
+    {"key": "piper-en_US-lessac-medium",      "label": "Piper · lessac (neutral US female, CPU)  ★ offline default",
+     "group": "Local — OSS"},
+    {"key": "piper-en_US-ryan-high",          "label": "Piper · ryan-high (US male, high quality)",
+     "group": "Local — OSS"},
+    {"key": "piper-en_US-arctic-medium",      "label": "Piper · arctic-medium (US female, alternative)",
+     "group": "Local — OSS"},
+    {"key": "piper-en_GB-alan-medium",        "label": "Piper · alan-medium (British male)",
+     "group": "Local — OSS"},
+    {"key": "kokoro-af_bella",                "label": "Kokoro · af_bella  (warm female, ~150 MB download)",
+     "group": "Local — OSS"},
+    {"key": "kokoro-af_sarah",                "label": "Kokoro · af_sarah  (~150 MB download)",
+     "group": "Local — OSS"},
 ]
 
 

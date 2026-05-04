@@ -73,6 +73,69 @@ def _require(name: str) -> str:
     return val
 
 
+# Supported telephony providers — each maps to a LiveKit outbound SIP trunk.
+# Backward-compat: LIVEKIT_OUTBOUND_TRUNK_ID is the legacy Twilio var;
+# we fall back to it when LIVEKIT_TRUNK_TWILIO isn't explicitly set.
+_TELEPHONY = {
+    "twilio": {
+        "label": "Twilio",
+        "desc":  "Elastic SIP Trunk · ~$0.013/min US · ~$0.20/min India",
+        "env":   "LIVEKIT_TRUNK_TWILIO",
+    },
+    "telnyx": {
+        "label": "Telnyx",
+        "desc":  "~$0.002/min US · ~$0.05/min India · $10 free credit",
+        "env":   "LIVEKIT_TRUNK_TELNYX",
+    },
+    "signalwire": {
+        "label": "SignalWire",
+        "desc":  "Twilio-compatible API · ~$0.02/min · $5 free credit",
+        "env":   "LIVEKIT_TRUNK_SIGNALWIRE",
+    },
+    "exotel": {
+        "label": "Exotel",
+        "desc":  "Indian provider · best India rates · local +91 caller ID",
+        "env":   "LIVEKIT_TRUNK_EXOTEL",
+    },
+}
+
+
+def _trunk_id(provider: str) -> str:
+    """Return the LiveKit outbound SIP trunk ID for the given provider.
+    Raises HTTP 500 if the provider isn't configured."""
+    meta = _TELEPHONY.get(provider)
+    if meta:
+        val = os.getenv(meta["env"], "").strip()
+        if val:
+            return val
+    # Legacy fallback for Twilio
+    if provider in ("twilio", ""):
+        val = os.getenv("LIVEKIT_OUTBOUND_TRUNK_ID", "").strip()
+        if val:
+            return val
+    env_hint = _TELEPHONY.get(provider, {}).get("env", "LIVEKIT_OUTBOUND_TRUNK_ID")
+    raise HTTPException(
+        500,
+        f"No LiveKit SIP trunk configured for '{provider}'. Set {env_hint} in .env.",
+    )
+
+
+def _telephony_catalog() -> list[dict]:
+    """All providers with a configured flag — fed to the precall UI."""
+    out = []
+    for key, meta in _TELEPHONY.items():
+        val = os.getenv(meta["env"], "").strip()
+        if not val and key == "twilio":
+            val = os.getenv("LIVEKIT_OUTBOUND_TRUNK_ID", "").strip()
+        out.append({
+            "key":        key,
+            "label":      meta["label"],
+            "desc":       meta["desc"],
+            "configured": bool(val),
+        })
+    return out
+
+
 def _lk_client() -> LiveKitAPI:
     """Build a LiveKit server-side API client. Uses LIVEKIT_URL/API_KEY/SECRET."""
     return LiveKitAPI(
@@ -112,6 +175,7 @@ async def api_catalog():
         "stt": STT_OPTIONS,
         "llm": LLM_OPTIONS,
         "tts": TTS_OPTIONS,
+        "telephony": _telephony_catalog(),
     }
 
 
@@ -201,8 +265,10 @@ async def api_dial(request: Request):
         )
         logger.info(f"[api/dial] dispatched agent={agent_name} → room={room_name}")
 
-        # 2. Create the SIP outbound participant — LiveKit dials the phone.
-        trunk_id = _require("LIVEKIT_OUTBOUND_TRUNK_ID")
+        # 2. Create the SIP outbound participant — LiveKit dials the phone
+        #    through whichever provider the operator selected.
+        provider = (body.get("telephony_provider") or "twilio").strip()
+        trunk_id = _trunk_id(provider)
         await lkapi.sip.create_sip_participant(
             CreateSIPParticipantRequest(
                 sip_trunk_id=trunk_id,
@@ -213,7 +279,10 @@ async def api_dial(request: Request):
                 wait_until_answered=False,
             )
         )
-        logger.info(f"[api/dial] SIP outbound to {phone} via trunk={trunk_id[:10]}…")
+        logger.info(
+            f"[api/dial] SIP outbound to {phone} "
+            f"via {provider} trunk={trunk_id[:10]}…"
+        )
     except Exception as e:
         logger.exception(f"[api/dial] LiveKit dispatch failed: {e}")
         raise HTTPException(502, f"LiveKit dispatch failed: {e}")
