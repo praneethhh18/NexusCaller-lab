@@ -28,21 +28,16 @@ Endpoints
 """
 from __future__ import annotations
 
-import asyncio
 import os
-import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
-from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, Response
-from livekit import api
 from livekit.api import (
     AccessToken, CreateAgentDispatchRequest, CreateSIPParticipantRequest,
-    LiveKitAPI, RoomConfiguration, VideoGrants,
+    LiveKitAPI, VideoGrants,
 )
 from loguru import logger
 
@@ -241,7 +236,6 @@ async def api_dial(request: Request):
         "combo":          combo_key,
     }
 
-    started_at = datetime.now(timezone.utc).isoformat()
     logger.info(
         f"[api/dial] call_id={call_id} room={room_name} phone={phone} "
         f"stack={stt_key} / {llm_key} / {tts_key}"
@@ -308,7 +302,6 @@ async def get_call_summary(call_id: str):
 
     Also useful for ad-hoc inspection: paste the call_id in the URL bar."""
     import json
-    from pathlib import Path
     sp = TRANSCRIPT_DIR / f"{call_id}.summary.json"
     tp = TRANSCRIPT_DIR / f"{call_id}.jsonl"
     out = {"call_id": call_id, "summary": None, "turns": []}

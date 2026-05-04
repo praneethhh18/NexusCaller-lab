@@ -24,13 +24,11 @@ import asyncio
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any
 
 import httpx
 from dotenv import load_dotenv
-from livekit import agents, rtc
 from livekit.agents import (
-    Agent, AgentSession, JobContext, RoomInputOptions, WorkerOptions, cli,
+    Agent, AgentSession, JobContext, WorkerOptions, cli,
 )
 from livekit.plugins import cartesia, deepgram, elevenlabs, openai, silero
 from loguru import logger
@@ -331,7 +329,7 @@ async def entrypoint(ctx: JobContext):
     logger.info(f"[vox] waiting for SIP participant to join room {ctx.room.name}")
     try:
         await ctx.wait_for_participant()
-        logger.info(f"[vox] caller joined — letting audio path settle…")
+        logger.info("[vox] caller joined — letting audio path settle…")
     except Exception as e:
         logger.warning(f"[vox] wait_for_participant failed (continuing anyway): {e}")
 
@@ -339,7 +337,7 @@ async def entrypoint(ctx: JobContext):
     # AND gives the caller a moment to put the phone to their ear after
     # tapping Answer.
     await asyncio.sleep(1.5)
-    logger.info(f"[vox] speaking greeting")
+    logger.info("[vox] speaking greeting")
     await session.say(_greeting(meta))
 
     # Re-broadcast the connected state now that the caller is on the line.

@@ -23,13 +23,10 @@ hard fallback when cloud providers are degraded.
 from __future__ import annotations
 
 import asyncio
-import io
 import os
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
-from livekit import rtc
 from livekit.agents import (
     APIConnectOptions, DEFAULT_API_CONNECT_OPTIONS, NOT_GIVEN, NotGivenOr,
     stt, tts, utils,

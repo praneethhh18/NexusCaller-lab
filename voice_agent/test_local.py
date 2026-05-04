@@ -52,7 +52,8 @@ def check_prereqs(skip_llm: bool = False, skip_stt: bool = False) -> bool:
 
     # Ollama reachability — only a hard failure when LLM test is active
     try:
-        import urllib.request, json
+        import json
+        import urllib.request
         r = urllib.request.urlopen("http://localhost:11434/api/tags", timeout=3)
         tags = json.loads(r.read())
         models = [m["name"] for m in tags.get("models", [])]
@@ -70,9 +71,9 @@ def check_prereqs(skip_llm: bool = False, skip_stt: bool = False) -> bool:
         label = FAIL if not skip_llm else SKIP
         print(f"  {label}  Ollama not reachable ({e})")
         if skip_llm:
-            print(f"         (LLM skipped — that's fine)")
+            print("         (LLM skipped — that's fine)")
         else:
-            print(f"         Start Ollama, then: ollama pull qwen2.5:0.5b-instruct")
+            print("         Start Ollama, then: ollama pull qwen2.5:0.5b-instruct")
             ok = False
 
     # Check cached Piper model
@@ -103,7 +104,8 @@ def test_llm() -> str | None:
     # plugin uses cloud-tuned timeouts (5-10 s) that are too short for a
     # local model loading into RAM on the first call.
     try:
-        import urllib.request, json
+        import json
+        import urllib.request
         payload = json.dumps({
             "model": "qwen2.5:0.5b-instruct",
             "stream": False,
@@ -128,7 +130,8 @@ def test_llm() -> str | None:
         return reply
     except Exception as e:
         print(f"  {FAIL}  {e}")
-        import traceback; traceback.print_exc()
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -147,7 +150,6 @@ def test_stt(piper_pcm: bytes | None, piper_sr: int = 22050) -> str | None:
             # Resample to 16 kHz if needed
             if piper_sr != 16000:
                 from scipy.signal import resample_poly
-                import math
                 def gcd(a, b): return a if b == 0 else gcd(b, a % b)
                 g = gcd(piper_sr, 16000)
                 samples_f32 = resample_poly(samples_f32, 16000 // g, piper_sr // g).astype(np.float32)
@@ -168,7 +170,8 @@ def test_stt(piper_pcm: bytes | None, piper_sr: int = 22050) -> str | None:
         return transcript
     except Exception as e:
         print(f"  {FAIL}  {e}")
-        import traceback; traceback.print_exc()
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -199,15 +202,16 @@ def test_tts(text: str | None) -> tuple[bytes, int] | tuple[None, None]:
         rtf = elapsed / duration
         print(f"  {PASS}  {elapsed:.2f}s inference -> {duration:.2f}s audio  (RTF {rtf:.2f}x)")
         if rtf < 0.5:
-            print(f"         Excellent — well under real-time")
+            print("         Excellent — well under real-time")
         elif rtf < 1.0:
-            print(f"         Good — under real-time")
+            print("         Good — under real-time")
         else:
-            print(f"         Slow — CPU may be under load")
+            print("         Slow — CPU may be under load")
         return pcm, sr
     except Exception as e:
         print(f"  {FAIL}  {e}")
-        import traceback; traceback.print_exc()
+        import traceback
+        traceback.print_exc()
         return None, None
 
 
@@ -221,7 +225,7 @@ def save_wav(pcm: bytes, sr: int, path: Path):
             wf.setframerate(sr)
             wf.writeframes(pcm)
         print(f"  {PASS}  Saved -> {path}")
-        print(f"         Open this file in any audio player to hear the TTS output")
+        print("         Open this file in any audio player to hear the TTS output")
     except Exception as e:
         print(f"  {FAIL}  Could not save: {e}")
 
@@ -233,7 +237,7 @@ def play_audio(pcm: bytes, sr: int):
         samples = np.frombuffer(pcm, dtype=np.int16)
         print(f"  Playing {len(pcm)/2/sr:.1f}s of audio…")
         sd.play(samples, samplerate=sr, blocking=True)
-        print(f"  Done")
+        print("  Done")
     except ImportError:
         print(f"  {SKIP}  sounddevice not installed — pip install sounddevice")
     except Exception as e:
