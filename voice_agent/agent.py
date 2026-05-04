@@ -110,6 +110,24 @@ def _build_llm(key: str):
             model=model,
             api_key=os.getenv("OPENAI_API_KEY"),
         )
+    if key.startswith("cerebras-"):
+        # Cerebras — Groq-speed free cloud inference. Free tier, no card needed.
+        # Sign up at https://cloud.cerebras.ai — set CEREBRAS_API_KEY in .env.
+        model = key.removeprefix("cerebras-")
+        return openai.LLM(
+            model=model,
+            base_url="https://api.cerebras.ai/v1",
+            api_key=os.getenv("CEREBRAS_API_KEY") or "not-set",
+        )
+    if key.startswith("sambanova-"):
+        # SambaNova — free cloud GPU inference, Llama 3.1/3.3 models.
+        # Sign up at https://cloud.sambanova.ai — set SAMBANOVA_API_KEY in .env.
+        model = key.removeprefix("sambanova-")
+        return openai.LLM(
+            model=model,
+            base_url="https://api.sambanova.ai/v1",
+            api_key=os.getenv("SAMBANOVA_API_KEY") or "not-set",
+        )
     if key.startswith("together-"):
         # Together.ai — cloud GPU inference for open models. Free $5 credit,
         # no Groq dependency. Get key at https://api.together.xyz — set TOGETHER_API_KEY.

@@ -59,6 +59,24 @@ PRESETS: list[Combo] = [
         badge="low latency",
     ),
     Combo(
+        key="deepgram-cerebras-elevenlabs",
+        label="Deepgram + Cerebras + ElevenLabs",
+        description="Nova-3 STT · Llama 3.1 8B on Cerebras (free, Groq-speed) · ElevenLabs Turbo.",
+        stt="deepgram-nova-3",
+        llm="cerebras-llama3.1-8b",
+        tts="elevenlabs-eleven_turbo_v2_5",
+        badge="free + fast",
+    ),
+    Combo(
+        key="deepgram-sambanova-elevenlabs",
+        label="Deepgram + SambaNova + ElevenLabs",
+        description="Nova-3 STT · Llama 3.1 8B on SambaNova (free cloud GPU) · ElevenLabs Turbo.",
+        stt="deepgram-nova-3",
+        llm="sambanova-Meta-Llama-3.1-8B-Instruct",
+        tts="elevenlabs-eleven_turbo_v2_5",
+        badge="free cloud",
+    ),
+    Combo(
         key="deepgram-gpt4o-mini-elevenlabs",
         label="Deepgram + GPT-4o mini + ElevenLabs",
         description="Nova-3 STT · GPT-4o mini · ElevenLabs Turbo. Fast, affordable OpenAI model.",
@@ -140,6 +158,14 @@ STT_OPTIONS = [
 ]
 
 LLM_OPTIONS = [
+    {"key": "cerebras-llama3.1-8b",                "label": "Cerebras · Llama 3.1 8B  (free, Groq-speed)",
+     "group": "Cloud — Cerebras"},
+    {"key": "cerebras-llama3.1-70b",               "label": "Cerebras · Llama 3.1 70B  (free, high quality)",
+     "group": "Cloud — Cerebras"},
+    {"key": "sambanova-Meta-Llama-3.1-8B-Instruct", "label": "SambaNova · Llama 3.1 8B  (free cloud GPU)",
+     "group": "Cloud — SambaNova"},
+    {"key": "sambanova-Meta-Llama-3.3-70B-Instruct", "label": "SambaNova · Llama 3.3 70B  (free, best quality)",
+     "group": "Cloud — SambaNova"},
     {"key": "openai-gpt-4o-mini",                  "label": "OpenAI · GPT-4o mini  (fast, affordable)",
      "group": "Cloud — OpenAI"},
     {"key": "openai-gpt-4o",                       "label": "OpenAI · GPT-4o  (best quality)",
