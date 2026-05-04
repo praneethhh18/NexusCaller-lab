@@ -103,6 +103,26 @@ def _build_llm(key: str):
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             api_key=os.getenv("GEMINI_API_KEY"),
         )
+    if key.startswith("together-"):
+        # Together.ai — cloud GPU inference for open models. Free $5 credit,
+        # no Groq dependency. Get key at https://api.together.xyz — set TOGETHER_API_KEY.
+        api_key = os.getenv("TOGETHER_API_KEY") or "not-set"
+        model = key.removeprefix("together-")
+        return openai.LLM(
+            model=model,
+            base_url="https://api.together.xyz/v1",
+            api_key=api_key,
+        )
+    if key.startswith("openrouter-"):
+        # OpenRouter — routes to 200+ models, has free tier models.
+        # Get key at https://openrouter.ai — set OPENROUTER_API_KEY.
+        api_key = os.getenv("OPENROUTER_API_KEY") or "not-set"
+        model = key.removeprefix("openrouter-")
+        return openai.LLM(
+            model=model,
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+        )
     raise ValueError(f"Unknown LLM key: {key!r}")
 
 
