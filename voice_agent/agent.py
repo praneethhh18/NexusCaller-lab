@@ -53,7 +53,7 @@ def _build_stt(key: str, *, keyterms: list[str] | None = None):
             language="multi",          # auto-detect English / Hindi / mix
             interim_results=True,
             smart_format=True,
-            keyterms=keyterms or [],
+            keyterm=keyterms or [],
         )
     if key.startswith("groq-whisper-"):
         model = key.removeprefix("groq-")
