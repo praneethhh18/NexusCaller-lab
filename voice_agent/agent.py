@@ -94,6 +94,15 @@ def _build_llm(key: str):
             model=model,
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
         )
+    if key.startswith("gemini-"):
+        # Google Gemini via its OpenAI-compatible endpoint. Get a free key at
+        # https://aistudio.google.com/apikey  — set GEMINI_API_KEY in .env.
+        model = key.removeprefix("gemini-")
+        return openai.LLM(
+            model=model,
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+            api_key=os.getenv("GEMINI_API_KEY"),
+        )
     raise ValueError(f"Unknown LLM key: {key!r}")
 
 
