@@ -17,9 +17,6 @@ Place call → /api/dial:
        which renders the cockpit, connects to the same room as a passive
        viewer, and shows live transcript + summary via DataChannel.
 
-Pipecat-era endpoints (POST /twilio/voice, WS /twilio/stream) are gone —
-LiveKit owns all audio routing now, with built-in Krisp echo cancellation.
-
 Endpoints
 ─────────
     GET  /health                   liveness check

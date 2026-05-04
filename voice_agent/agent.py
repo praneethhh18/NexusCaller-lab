@@ -17,9 +17,6 @@ Behaviour:
      Groq Llama and POSTs it back to NexusAgent's voice-callback URL so
      the CRM updates the contact record.
 
-The Pipecat-era audio-pipeline + stt-mute filter is gone. LiveKit handles
-turn detection (MultilingualModel) + Krisp echo cancellation natively, so
-half-duplex hacks are no longer needed — Vox can be naturally interrupted.
 """
 from __future__ import annotations
 
@@ -234,9 +231,8 @@ async def entrypoint(ctx: JobContext):
         f"contact={contact_name!r}"
     )
 
-    # Build the conversational session. AgentSession's interruption logic
-    # is far more sophisticated than Pipecat's — `min_interruption_words=2`
-    # means a stray "uh" doesn't interrupt, but a real sentence does.
+    # Build the conversational session. min_interruption_words=1 means a
+    # confident word triggers barge-in; Krisp filters echo at the audio layer.
     #
     # We use Silero VAD's default turn detection (no MultilingualModel)
     # because the latter needs ~100MB of HF model weights downloaded at

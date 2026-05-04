@@ -1,14 +1,15 @@
 """
-Outbound voice-agent module — Phase 1 POC.
+NexusCaller voice-agent module (LiveKit edition).
 
-Bridges a Twilio outbound call to a Pipecat pipeline (Groq STT + Llama
-LLM + ElevenLabs TTS), records the transcript, then summarises the call
-via Groq Llama once the caller hangs up.
+Outbound PSTN calling via LiveKit SIP trunks + cloud or local STT/LLM/TTS.
+Each call is dispatched as a LiveKit agent job to this worker.
 
 Layout:
-    pipeline.py    Pipecat task built around TwilioFrameSerializer
-    server.py      FastAPI: TwiML + Media Streams WebSocket
-    dial.py        CLI that initiates the outbound call
-    summary.py     Post-call structured summary
-    transcripts/   JSONL per call (created on first run)
+    agent.py          LiveKit agent worker — STT/LLM/TTS pipeline per call
+    server.py         FastAPI: precall UI, /api/dial, cockpit, /api/catalog
+    combos.py         Preset stack combos shown in the precall picker
+    local_plugins.py  Offline STT (Whisper) and TTS (Piper) wrappers
+    storage.py        Transcript + summary file paths
+    summary.py        Post-call structured summary via Groq Llama
+    transcripts/      JSONL per call (created on first run)
 """

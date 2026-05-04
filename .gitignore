@@ -37,3 +37,11 @@ voice_agent/transcripts/
 node_modules/
 dist/
 build/
+
+# Auto-generated docs (large, not useful in git)
+PROJECT_DOCUMENTATION.md
+CHANGELOG.md
+
+# Test artifacts
+test_output.wav
+*.wav

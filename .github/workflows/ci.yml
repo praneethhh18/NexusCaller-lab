@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # ── Lint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: pip install ruff
+      - run: ruff check --output-format=github voice_agent/
+
+  # ── Import smoke ──────────────────────────────────────────────────────────
+  # Verifies that all modules import cleanly and the FastAPI router wires up
+  # correctly. Catches missing deps and broken imports before a deploy.
+  import-smoke:
+    name: Import smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install
+        run: pip install -r requirements.txt
+
+      - name: Server routes
+        env:
+          LIVEKIT_URL: wss://placeholder.livekit.cloud
+          LIVEKIT_API_KEY: placeholder
+          LIVEKIT_API_SECRET: placeholder
+        run: |
+          python -c "
+          from voice_agent.server import app
+          paths = {r.path for r in app.routes}
+          for p in ['/health', '/precall', '/api/catalog', '/api/dial']:
+              assert p in paths, f'missing route: {p}'
+          print(f'OK — {len(paths)} routes registered')
+          "
+
+      - name: Agent + combos
+        run: |
+          python -c "
+          from voice_agent.agent import entrypoint, prewarm
+          from voice_agent.combos import PRESETS, default_combo
+          from voice_agent.local_plugins import LocalWhisperSTT, PiperTTS
+          print(f'OK — {len(PRESETS)} combos, default={default_combo().key!r}')
+          "
+
+  # ── Docker build check ────────────────────────────────────────────────────
+  # Validates the Dockerfile builds without errors. Does NOT push.
+  docker:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build (amd64, no push)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ── Secrets scan ──────────────────────────────────────────────────────────
+  secrets-scan:
+    name: Secrets scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
