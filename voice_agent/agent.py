@@ -103,6 +103,13 @@ def _build_llm(key: str):
             base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
             api_key=os.getenv("GEMINI_API_KEY"),
         )
+    if key.startswith("openai-"):
+        # OpenAI GPT models. Set OPENAI_API_KEY in .env.
+        model = key.removeprefix("openai-")
+        return openai.LLM(
+            model=model,
+            api_key=os.getenv("OPENAI_API_KEY"),
+        )
     if key.startswith("together-"):
         # Together.ai — cloud GPU inference for open models. Free $5 credit,
         # no Groq dependency. Get key at https://api.together.xyz — set TOGETHER_API_KEY.

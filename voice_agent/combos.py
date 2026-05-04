@@ -59,6 +59,24 @@ PRESETS: list[Combo] = [
         badge="low latency",
     ),
     Combo(
+        key="deepgram-gpt4o-mini-elevenlabs",
+        label="Deepgram + GPT-4o mini + ElevenLabs",
+        description="Nova-3 STT · GPT-4o mini · ElevenLabs Turbo. Fast, affordable OpenAI model.",
+        stt="deepgram-nova-3",
+        llm="openai-gpt-4o-mini",
+        tts="elevenlabs-eleven_turbo_v2_5",
+        badge="openai",
+    ),
+    Combo(
+        key="deepgram-gpt4o-elevenlabs",
+        label="Deepgram + GPT-4o + ElevenLabs",
+        description="Nova-3 STT · GPT-4o · ElevenLabs Turbo. Best quality, higher cost.",
+        stt="deepgram-nova-3",
+        llm="openai-gpt-4o",
+        tts="elevenlabs-eleven_turbo_v2_5",
+        badge="best quality",
+    ),
+    Combo(
         key="deepgram-together-elevenlabs",
         label="Deepgram + Together.ai + ElevenLabs",
         description="Nova-3 STT · Llama 3.1 8B cloud GPU · ElevenLabs Turbo. Groq-speed, no Groq dependency.",
@@ -122,6 +140,12 @@ STT_OPTIONS = [
 ]
 
 LLM_OPTIONS = [
+    {"key": "openai-gpt-4o-mini",                  "label": "OpenAI · GPT-4o mini  (fast, affordable)",
+     "group": "Cloud — OpenAI"},
+    {"key": "openai-gpt-4o",                       "label": "OpenAI · GPT-4o  (best quality)",
+     "group": "Cloud — OpenAI"},
+    {"key": "openai-gpt-4.1-mini",                 "label": "OpenAI · GPT-4.1 mini",
+     "group": "Cloud — OpenAI"},
     {"key": "gemini-gemini-2.0-flash",             "label": "Gemini · 2.0 Flash  (free, fast)",
      "group": "Cloud — Google"},
     {"key": "gemini-gemini-1.5-flash",             "label": "Gemini · 1.5 Flash  (free, stable)",
