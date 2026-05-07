@@ -29,6 +29,7 @@ Endpoints
 from __future__ import annotations
 
 import os
+import re
 import uuid
 from pathlib import Path
 
@@ -198,9 +199,12 @@ async def api_dial(request: Request):
     except Exception:
         raise HTTPException(400, "body must be JSON")
 
-    phone = (body.get("phone") or "").strip()
-    if not phone or not phone.startswith("+"):
-        raise HTTPException(400, "phone is required in E.164 format (e.g. +91…)")
+    # E.164 requires no spaces / dashes / parens — strip all formatting.
+    # The UI sometimes passes "+91 94832 40597" which Twilio's SIP rejects silently.
+    raw_phone = (body.get("phone") or "").strip()
+    phone = re.sub(r"[\s\-\(\)\.]", "", raw_phone)
+    if not phone or not phone.startswith("+") or not phone[1:].isdigit():
+        raise HTTPException(400, f"phone must be E.164 (e.g. +919483240597), got {raw_phone!r}")
 
     # Resolve stack
     stt_key = (body.get("stt") or "").strip()
