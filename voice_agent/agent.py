@@ -152,6 +152,14 @@ def _build_llm(key: str):
 
 
 def _build_tts(key: str):
+    if key.startswith("deepgram-"):
+        # Deepgram Aura TTS — uses the same DEEPGRAM_API_KEY as STT.
+        # Voice key is the part after "deepgram-" (e.g. "aura-2-asteria-en").
+        model = key.removeprefix("deepgram-")
+        return deepgram.TTS(
+            model=model,
+            api_key=os.getenv("DEEPGRAM_API_KEY"),
+        )
     if key.startswith("elevenlabs-"):
         model = key.removeprefix("elevenlabs-")
         return elevenlabs.TTS(

@@ -32,13 +32,22 @@ class Combo:
 # First combo is the default — picked when no combo/stt/llm/tts is specified.
 PRESETS: list[Combo] = [
     Combo(
+        key="deepgram-sambanova-aura",
+        label="Deepgram + SambaNova + Deepgram Aura",
+        description="Nova-3 STT · Llama 3.3 70B on SambaNova · Deepgram Aura-2 TTS. Single Deepgram key for STT+TTS, free SambaNova LLM.",
+        stt="deepgram-nova-3",
+        llm="sambanova-Meta-Llama-3.3-70B-Instruct",
+        tts="deepgram-aura-2-asteria-en",
+        badge="default",
+    ),
+    Combo(
         key="deepgram-sambanova-elevenlabs",
         label="Deepgram + SambaNova + ElevenLabs",
-        description="Nova-3 STT · Llama 3.3 70B on SambaNova (free cloud GPU) · ElevenLabs Turbo.",
+        description="Nova-3 STT · Llama 3.3 70B on SambaNova · ElevenLabs Turbo. Needs ElevenLabs paid plan if free tier banned.",
         stt="deepgram-nova-3",
         llm="sambanova-Meta-Llama-3.3-70B-Instruct",
         tts="elevenlabs-eleven_turbo_v2_5",
-        badge="default",
+        badge="elevenlabs",
     ),
     Combo(
         key="deepgram-gemini-elevenlabs",
@@ -181,6 +190,16 @@ LLM_OPTIONS = [
 ]
 
 TTS_OPTIONS = [
+    {"key": "deepgram-aura-2-asteria-en",        "label": "Deepgram · Aura-2 Asteria  (US female, fast, free with STT key)",
+     "group": "Cloud — Deepgram Aura"},
+    {"key": "deepgram-aura-2-thalia-en",         "label": "Deepgram · Aura-2 Thalia  (US female, warm)",
+     "group": "Cloud — Deepgram Aura"},
+    {"key": "deepgram-aura-2-orion-en",          "label": "Deepgram · Aura-2 Orion  (US male)",
+     "group": "Cloud — Deepgram Aura"},
+    {"key": "deepgram-aura-2-luna-en",           "label": "Deepgram · Aura-2 Luna  (US female, soft)",
+     "group": "Cloud — Deepgram Aura"},
+    {"key": "deepgram-aura-asteria-en",          "label": "Deepgram · Aura v1 Asteria  (legacy)",
+     "group": "Cloud — Deepgram Aura"},
     {"key": "elevenlabs-eleven_turbo_v2_5",      "label": "ElevenLabs · Turbo v2.5  (best quality)",
      "group": "Cloud — ElevenLabs"},
     {"key": "elevenlabs-eleven_flash_v2_5",      "label": "ElevenLabs · Flash v2.5  (lowest latency)",
