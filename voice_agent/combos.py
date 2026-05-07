@@ -32,13 +32,22 @@ class Combo:
 # First combo is the default — picked when no combo/stt/llm/tts is specified.
 PRESETS: list[Combo] = [
     Combo(
+        key="fast-deepgram-llama3b-aura",
+        label="Fast (Llama 3.2 3B + Aura)",
+        description="Nova-3 STT · Llama 3.2 3B on SambaNova (fast) · Aura-2 Asteria TTS. Lowest latency — target <800ms per reply.",
+        stt="deepgram-nova-3",
+        llm="sambanova-Meta-Llama-3.2-3B-Instruct",
+        tts="deepgram-aura-2-asteria-en",
+        badge="fastest",
+    ),
+    Combo(
         key="deepgram-sambanova-aura",
-        label="Deepgram + SambaNova + Deepgram Aura",
-        description="Nova-3 STT · Llama 3.3 70B on SambaNova · Deepgram Aura-2 TTS. Single Deepgram key for STT+TTS, free SambaNova LLM.",
+        label="Deepgram + SambaNova 70B + Aura",
+        description="Nova-3 STT · Llama 3.3 70B on SambaNova · Deepgram Aura-2 TTS. Best quality, ~1.4s reply latency.",
         stt="deepgram-nova-3",
         llm="sambanova-Meta-Llama-3.3-70B-Instruct",
         tts="deepgram-aura-2-asteria-en",
-        badge="default",
+        badge="best quality",
     ),
     Combo(
         key="deepgram-sambanova-elevenlabs",

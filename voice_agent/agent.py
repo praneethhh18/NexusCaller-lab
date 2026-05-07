@@ -304,21 +304,20 @@ async def entrypoint(ctx: JobContext):
         llm=_build_llm(llm_key),
         tts=_build_tts(tts_key),
         vad=silero.VAD.load(),
-        # Barge-in: trigger on ANY confident word — Krisp filters real echo
-        # at the audio layer, so we don't need word-count gating to ignore
-        # spurious interruptions any more.  Result: caller can naturally cut
-        # Vox off mid-sentence, like a human conversation.
+        # Barge-in: trigger on ANY confident word — Krisp filters real echo.
         allow_interruptions=True,
         min_interruption_duration=0.3,
         min_interruption_words=1,
         false_interruption_timeout=2.0,
+        # Tighter turn-detection — drops ~250ms of dead air per agent reply.
+        # 0.3s is the sweet spot: short enough to feel snappy, long enough
+        # not to interrupt mid-sentence on natural phone-call pauses.
+        min_endpointing_delay=0.3,
+        max_endpointing_delay=2.5,
         # Disable the "user is away" auto-shutdown.  Default is 15s of
-        # silence which auto-ends the call — way too aggressive on PSTN
-        # where the caller may be hesitant or distracted.  We let the
-        # caller decide when to hang up.
+        # silence which auto-ends the call — way too aggressive on PSTN.
         user_away_timeout=None,
-        # Shorten AEC warmup from 3s → 1s so STT starts processing the
-        # caller's audio sooner.  Krisp is fast-converging; 1s is enough.
+        # AEC warmup short enough to not delay first reply.
         aec_warmup_duration=1.0,
     )
 
@@ -395,10 +394,9 @@ async def entrypoint(ctx: JobContext):
     except Exception as e:
         logger.warning(f"[vox] wait_for_participant failed (continuing anyway): {e}")
 
-    # Settling pause: 1.5s gives the carrier audio path time to lock in
-    # AND gives the caller a moment to put the phone to their ear after
-    # tapping Answer.
-    await asyncio.sleep(1.5)
+    # Settling pause: 0.6s gives the carrier audio path time to lock in.
+    # Dropped from 1.5s — felt too long on calls where caller answered fast.
+    await asyncio.sleep(0.6)
     logger.info("[vox] speaking greeting")
     await session.say(_greeting(meta))
 
@@ -522,6 +520,17 @@ async def entrypoint(ctx: JobContext):
             logger.info("[vox] shutdown step 4/4: no callback_url, skipping CRM update")
 
     ctx.add_shutdown_callback(_on_shutdown)
+
+    # When the caller hangs up, end the call promptly. Without this, the
+    # agent keeps the room open until LiveKit's idle timeout fires — which
+    # can take 30-60s. We watch for the SIP participant disconnecting and
+    # ask the JobContext to shut down, which triggers _on_shutdown above.
+    @ctx.room.on("participant_disconnected")
+    def _on_caller_disconnect(participant):
+        identity = getattr(participant, "identity", "")
+        if identity.startswith("caller-"):
+            logger.info(f"[vox] caller disconnected (identity={identity}) — ending call")
+            asyncio.create_task(ctx.shutdown(reason="caller_hangup"))
 
 
 async def _post_callback(url: str, payload: dict, *, attempts: int = 3) -> None:
