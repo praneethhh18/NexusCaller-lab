@@ -32,6 +32,7 @@ from livekit.agents import (
 )
 from livekit.agents import llm as _lk_llm
 from livekit.agents._exceptions import APIStatusError
+from livekit.plugins import aws as lk_aws
 from livekit.plugins import cartesia, deepgram, elevenlabs, openai, silero
 from loguru import logger
 
@@ -215,43 +216,18 @@ def _build_llm(key: str):
             model=model,
             api_key=os.getenv("OPENAI_API_KEY"),
         )
-    if key.startswith("cerebras-"):
-        # Cerebras — Groq-speed free cloud inference. Free tier, no card needed.
-        # Sign up at https://cloud.cerebras.ai — set CEREBRAS_API_KEY in .env.
-        model = key.removeprefix("cerebras-")
-        return openai.LLM(
+    if key.startswith("bedrock-"):
+        # AWS Bedrock — Anthropic Claude, Amazon Nova, Meta Llama via
+        # inference profiles. No use-case form needed. Pay-per-token.
+        # Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_REGION in .env.
+        # Model id is everything after "bedrock-", e.g.
+        #   bedrock-us.anthropic.claude-haiku-4-5-20251001-v1:0
+        model = key.removeprefix("bedrock-")
+        return lk_aws.LLM(
             model=model,
-            base_url="https://api.cerebras.ai/v1",
-            api_key=os.getenv("CEREBRAS_API_KEY") or "not-set",
-        )
-    if key.startswith("sambanova-"):
-        # SambaNova — free cloud GPU inference, Llama 3.1/3.3 models.
-        # Sign up at https://cloud.sambanova.ai — set SAMBANOVA_API_KEY in .env.
-        model = key.removeprefix("sambanova-")
-        return openai.LLM(
-            model=model,
-            base_url="https://api.sambanova.ai/v1",
-            api_key=os.getenv("SAMBANOVA_API_KEY") or "not-set",
-        )
-    if key.startswith("together-"):
-        # Together.ai — cloud GPU inference for open models. Free $5 credit,
-        # no Groq dependency. Get key at https://api.together.xyz — set TOGETHER_API_KEY.
-        api_key = os.getenv("TOGETHER_API_KEY") or "not-set"
-        model = key.removeprefix("together-")
-        return openai.LLM(
-            model=model,
-            base_url="https://api.together.xyz/v1",
-            api_key=api_key,
-        )
-    if key.startswith("openrouter-"):
-        # OpenRouter — routes to 200+ models, has free tier models.
-        # Get key at https://openrouter.ai — set OPENROUTER_API_KEY.
-        api_key = os.getenv("OPENROUTER_API_KEY") or "not-set"
-        model = key.removeprefix("openrouter-")
-        return openai.LLM(
-            model=model,
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
+            region=os.getenv("AWS_REGION", "us-east-1"),
+            api_key=os.getenv("AWS_ACCESS_KEY_ID"),
+            api_secret=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
     raise ValueError(f"Unknown LLM key: {key!r}")
 
@@ -267,16 +243,15 @@ def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
     # Don't double-add the primary's provider in the fallback chain
     primary_prefix = primary_key.split("-", 1)[0]
 
-    # Order of preference for fallback when primary fails. Each entry
-    # is (env-var-to-check, llm-key-to-build).
-    # Gemini is first because it usually has the highest free RPM and
-    # works on Indian residential ISPs. Then SambaNova 70B (different
-    # rate-limit pool from Maverick), then OpenAI, then Groq.
+    # Fallback when primary errors (rate-limit / quota / 5xx).
+    # Bedrock is the most reliable cloud LLM right now — Indian
+    # residential ISPs aren't blocked, AWS-grade SLAs, no daily caps.
+    # Gemini second (free, high RPM), then OpenAI, then Groq.
     candidates = [
-        ("GEMINI_API_KEY",     "gemini-gemini-2.5-flash"),
-        ("SAMBANOVA_API_KEY",  "sambanova-Meta-Llama-3.3-70B-Instruct"),
-        ("OPENAI_API_KEY",     "openai-gpt-4o-mini"),
-        ("GROQ_API_KEY",       "groq-llama-3.1-8b-instant"),
+        ("AWS_SECRET_ACCESS_KEY", "bedrock-us.amazon.nova-lite-v1:0"),
+        ("GEMINI_API_KEY",        "gemini-gemini-2.5-flash"),
+        ("OPENAI_API_KEY",        "openai-gpt-4o-mini"),
+        ("GROQ_API_KEY",          "groq-llama-3.1-8b-instant"),
     ]
     for env_key, fallback_key in candidates:
         if not os.getenv(env_key):
