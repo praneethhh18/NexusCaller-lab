@@ -215,6 +215,17 @@ def _build_llm(key: str):
             model=model,
             api_key=os.getenv("OPENAI_API_KEY"),
         )
+    if key.startswith("nvidia-"):
+        # NVIDIA NIM — H100-hosted inference of open models. Free $1000
+        # credits on signup. OpenAI-compatible. Get key at build.nvidia.com.
+        # Model id is everything after "nvidia-", e.g.
+        #   nvidia-meta/llama-3.3-70b-instruct
+        model = key.removeprefix("nvidia-")
+        return openai.LLM(
+            model=model,
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=os.getenv("NVIDIA_API_KEY") or "not-set",
+        )
     if key.startswith("bedrock-"):
         # AWS Bedrock — Anthropic Claude, Amazon Nova, Meta Llama via
         # inference profiles. No use-case form needed. Pay-per-token.
@@ -246,9 +257,12 @@ def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
     # Bedrock is the most reliable cloud LLM right now — Indian
     # residential ISPs aren't blocked, AWS-grade SLAs, no daily caps.
     # Gemini second (free, high RPM), then OpenAI, then Groq.
-    # Order based on live benchmark (voice_agent/bench_llms.py):
-    # Llama 8B is the cheap-and-fast sweet spot when primary errors.
+    # Order based on live benchmark (voice_agent/bench_llms.py).
+    # NVIDIA NIM gets first fallback slot — H100 hosting, OpenAI-compat,
+    # not Cloudflare-blocked from Indian ISPs. Then Bedrock 70B / 8B
+    # (slower but reliable), then free Gemini, then OpenAI, then Groq.
     candidates = [
+        ("NVIDIA_API_KEY",        "nvidia-meta/llama-3.1-8b-instruct"),
         ("AWS_SECRET_ACCESS_KEY", "bedrock-us.meta.llama3-1-8b-instruct-v1:0"),
         ("AWS_SECRET_ACCESS_KEY", "bedrock-us.amazon.nova-lite-v1:0"),
         ("GEMINI_API_KEY",        "gemini-gemini-2.5-flash"),

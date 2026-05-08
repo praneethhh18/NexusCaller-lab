@@ -75,6 +75,35 @@ PRESETS: list[Combo] = [
         tts="deepgram-aura-2-asteria-en",
         badge="cheapest of all",
     ),
+    # ─── 🚀 NVIDIA NIM — H100-hosted, often beats Bedrock ──────────────
+    Combo(
+        key="nvidia-llama-70b",
+        label="🚀 NVIDIA · Llama 3.3 70B (H100)",
+        description="Nova-3 STT · Meta Llama 3.3 70B on NVIDIA NIM · Aura-2. H100 GPUs, free $1000 credits. Should beat Bedrock 70B latency. Sign up at build.nvidia.com.",
+        stt="deepgram-nova-3",
+        llm="nvidia-meta/llama-3.3-70b-instruct",
+        tts="deepgram-aura-2-asteria-en",
+        badge="NIM",
+    ),
+    Combo(
+        key="nvidia-llama-8b",
+        label="🚀 NVIDIA · Llama 3.1 8B (H100)",
+        description="Nova-3 STT · Meta Llama 3.1 8B on NVIDIA NIM · Aura-2. H100 GPUs — fastest 8B option from India.",
+        stt="deepgram-nova-3",
+        llm="nvidia-meta/llama-3.1-8b-instruct",
+        tts="deepgram-aura-2-asteria-en",
+        badge="NIM fast",
+    ),
+    Combo(
+        key="nvidia-nemotron-70b",
+        label="🚀 NVIDIA · Nemotron 70B (H100)",
+        description="Nova-3 STT · NVIDIA's tuned Llama 3.1 Nemotron 70B · Aura-2. NVIDIA's own optimized model, often higher quality than vanilla Llama.",
+        stt="deepgram-nova-3",
+        llm="nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
+        tts="deepgram-aura-2-asteria-en",
+        badge="NVIDIA tuned",
+    ),
+
     Combo(
         key="cheap-jamba-mini",
         label="💰 AI21 Jamba 1.5 Mini  (Mamba-Transformer)",
@@ -150,6 +179,25 @@ STT_OPTIONS = [
 ]
 
 LLM_OPTIONS = [
+    # NVIDIA NIM — H100-hosted, OpenAI-compat, free $1000 credits
+    {"key": "nvidia-meta/llama-3.3-70b-instruct",
+                                          "label": "NVIDIA NIM · Llama 3.3 70B  (H100, fastest from India)",
+     "group": "Cloud — NVIDIA NIM"},
+    {"key": "nvidia-meta/llama-3.1-8b-instruct",
+                                          "label": "NVIDIA NIM · Llama 3.1 8B  (H100)",
+     "group": "Cloud — NVIDIA NIM"},
+    {"key": "nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
+                                          "label": "NVIDIA NIM · Nemotron 70B  (NVIDIA-tuned Llama)",
+     "group": "Cloud — NVIDIA NIM"},
+    {"key": "nvidia-mistralai/mistral-7b-instruct-v0.3",
+                                          "label": "NVIDIA NIM · Mistral 7B v0.3",
+     "group": "Cloud — NVIDIA NIM"},
+    {"key": "nvidia-deepseek-ai/deepseek-r1",
+                                          "label": "NVIDIA NIM · DeepSeek R1  (reasoning)",
+     "group": "Cloud — NVIDIA NIM"},
+    {"key": "nvidia-google/gemma-2-9b-it",
+                                          "label": "NVIDIA NIM · Gemma 2 9B",
+     "group": "Cloud — NVIDIA NIM"},
     # Bedrock — ranked by live benchmark (first-token latency)
     {"key": "bedrock-us.meta.llama3-1-8b-instruct-v1:0",
                                           "label": "Bedrock · Llama 3.1 8B  ★ default · 656ms · $0.17/10k",
