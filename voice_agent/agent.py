@@ -55,6 +55,11 @@ def _build_stt(key: str, *, keyterms: list[str] | None = None):
             interim_results=True,
             smart_format=True,
             keyterm=keyterms or [],
+            # 250ms (vs default 25ms) gives soft / hesitant callers time to
+            # finish a sentence before Deepgram declares the turn over —
+            # critical when the caller's mic is muffled by holding to ear.
+            endpointing_ms=250,
+            filler_words=True,        # keep "um/uh" so STT doesn't truncate
         )
     if key.startswith("groq-whisper-"):
         model = key.removeprefix("groq-")
@@ -318,7 +323,13 @@ async def entrypoint(ctx: JobContext):
     # input on slower CPUs. Falls back to a fresh load if prewarm was skipped.
     vad = ctx.proc.userdata.get("vad") if hasattr(ctx, "proc") else None
     if vad is None:
-        vad = silero.VAD.load(sample_rate=8000, min_silence_duration=0.4)
+        vad = silero.VAD.load(
+            sample_rate=8000,
+            min_silence_duration=0.4,
+            prefix_padding_duration=0.3,
+            activation_threshold=0.30,
+            deactivation_threshold=0.15,
+        )
 
     session = AgentSession(
         stt=_build_stt(stt_key, keyterms=keyterms),
@@ -590,9 +601,19 @@ def prewarm(proc):
     # 8 kHz matches the PSTN audio rate (skips upsampling) and roughly
     # halves Silero's per-frame inference cost — fixes "inference is
     # slower than realtime" warnings on slower CPUs.
+    #
+    # Tuned for phone-to-ear callers who speak softly:
+    #   activation_threshold=0.30  (default 0.5) → picks up quieter speech
+    #   deactivation_threshold=0.15 (vs auto 0.35) → keeps speech latched
+    #     so a soft trailing word isn't cut off mid-thought
+    #   prefix_padding_duration=0.3 → less front-clipping on quick replies
     proc.userdata["vad"] = silero.VAD.load(
         sample_rate=8000,
+        min_speech_duration=0.05,
         min_silence_duration=0.4,
+        prefix_padding_duration=0.3,
+        activation_threshold=0.30,
+        deactivation_threshold=0.15,
     )
 
     if os.getenv("LOCAL_OSS_PREWARM", "1") != "0":
