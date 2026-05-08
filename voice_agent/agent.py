@@ -42,6 +42,34 @@ from voice_agent.summary import summarise_transcript
 load_dotenv()
 
 
+# ── Custom TTS wrappers ──────────────────────────────────────────────────
+class _DeepgramAuraChunked(deepgram.TTS):
+    """Force the Deepgram Aura TTS to always use chunked HTTP synthesis.
+
+    The upstream plugin advertises streaming=True and opens a WebSocket
+    pool. The WS path drops audio chunks under load ("flush audio emitter
+    due to slow audio generation") and fails outright on flaky networks.
+    Chunked HTTP returns the whole audio response in one shot, so phone
+    playback is always smooth.
+
+    Overrides:
+      - capabilities: report streaming=False so AgentSession picks
+        synthesize() instead of stream().
+      - stream(): block direct callers — they should use synthesize().
+    """
+
+    @property
+    def capabilities(self) -> _lk_tts.TTSCapabilities:
+        return _lk_tts.TTSCapabilities(streaming=False)
+
+    def stream(self, *args, **kwargs):  # type: ignore[override]
+        raise NotImplementedError(
+            "_DeepgramAuraChunked is chunked-only; AgentSession should "
+            "be calling synthesize(). If you see this, capabilities "
+            "wasn't honored — file a bug."
+        )
+
+
 # ── Plugin builders ──────────────────────────────────────────────────────
 def _build_stt(key: str, *, keyterms: list[str] | None = None):
     """Map a stack-key like 'deepgram-nova-3' or 'groq-whisper-…' to a
@@ -159,26 +187,18 @@ def _build_llm(key: str):
 
 def _build_tts(key: str):
     if key.startswith("deepgram-"):
-        # Deepgram Aura TTS — uses the same DEEPGRAM_API_KEY as STT.
-        # Voice key is the part after "deepgram-" (e.g. "aura-2-asteria-en").
-        # 16 kHz instead of the default 24 kHz — half the resampling work
-        # for PSTN's 8 kHz μ-law output.
-        # Force chunked HTTP path (not WebSocket): the streaming WS path
-        # was timing out / dropping audio mid-greeting on slower networks
-        # and giving "flush audio emitter due to slow audio generation"
-        # warnings. HTTP returns the whole response at once, which plays
-        # smoothly. Aura HTTP RTF ~0.7 — well under realtime.
+        # Deepgram Aura TTS, forced into chunked-HTTP mode via subclass.
+        # The default WebSocket streaming path produces "flush audio
+        # emitter due to slow audio generation" warnings (chunks arrive
+        # late) and is unreliable on slower networks. Chunked HTTP
+        # (synthesize() path) returns the whole audio in one response
+        # at RTF ~0.7 — smooth phone playback.
         model = key.removeprefix("deepgram-")
-        t = deepgram.TTS(
+        return _DeepgramAuraChunked(
             model=model,
             sample_rate=16000,
             api_key=os.getenv("DEEPGRAM_API_KEY"),
         )
-        # Tell AgentSession to use synthesize() (HTTP chunked) instead of
-        # stream() (WebSocket). The plugin advertises streaming=True by
-        # default, but the chunked path is more reliable.
-        t._capabilities = _lk_tts.TTSCapabilities(streaming=False)
-        return t
     if key.startswith("elevenlabs-"):
         model = key.removeprefix("elevenlabs-")
         return elevenlabs.TTS(
@@ -382,8 +402,10 @@ async def entrypoint(ctx: JobContext):
         # Disable the "user is away" auto-shutdown.  Default is 15s of
         # silence which auto-ends the call — way too aggressive on PSTN.
         user_away_timeout=None,
-        # AEC warmup short enough to not delay first reply.
-        aec_warmup_duration=1.0,
+        # AEC warmup: 0.3s instead of 1.0s. PSTN+Twilio has minimal echo,
+        # and the long warmup was causing "flush audio emitter" warnings
+        # at the start of the greeting (audio dropped during the lockout).
+        aec_warmup_duration=0.3,
     )
 
     # Transcript collector → also broadcasts to data-channel for cockpit viewers.
