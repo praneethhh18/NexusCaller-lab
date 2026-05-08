@@ -30,7 +30,6 @@ from dotenv import load_dotenv
 from livekit.agents import (
     Agent, AgentSession, JobContext, WorkerOptions, cli,
 )
-from livekit.agents import tts as _lk_tts
 from livekit.plugins import cartesia, deepgram, elevenlabs, openai, silero
 from loguru import logger
 
@@ -40,34 +39,6 @@ from voice_agent.summary import summarise_transcript
 
 
 load_dotenv()
-
-
-# ── Custom TTS wrappers ──────────────────────────────────────────────────
-class _DeepgramAuraChunked(deepgram.TTS):
-    """Force the Deepgram Aura TTS to always use chunked HTTP synthesis.
-
-    The upstream plugin advertises streaming=True and opens a WebSocket
-    pool. The WS path drops audio chunks under load ("flush audio emitter
-    due to slow audio generation") and fails outright on flaky networks.
-    Chunked HTTP returns the whole audio response in one shot, so phone
-    playback is always smooth.
-
-    Overrides:
-      - capabilities: report streaming=False so AgentSession picks
-        synthesize() instead of stream().
-      - stream(): block direct callers — they should use synthesize().
-    """
-
-    @property
-    def capabilities(self) -> _lk_tts.TTSCapabilities:
-        return _lk_tts.TTSCapabilities(streaming=False)
-
-    def stream(self, *args, **kwargs):  # type: ignore[override]
-        raise NotImplementedError(
-            "_DeepgramAuraChunked is chunked-only; AgentSession should "
-            "be calling synthesize(). If you see this, capabilities "
-            "wasn't honored — file a bug."
-        )
 
 
 # ── Plugin builders ──────────────────────────────────────────────────────
@@ -83,10 +54,12 @@ def _build_stt(key: str, *, keyterms: list[str] | None = None):
             interim_results=True,
             smart_format=True,
             keyterm=keyterms or [],
-            # 250ms (vs default 25ms) gives soft / hesitant callers time to
-            # finish a sentence before Deepgram declares the turn over —
-            # critical when the caller's mic is muffled by holding to ear.
-            endpointing_ms=250,
+            # 150ms — compromise between snappy turns and giving soft
+            # callers time to finish a thought. Final turn-end timing is
+            # actually controlled by turn_handling.endpointing.min_delay
+            # in AgentSession, so this just controls how soon Deepgram
+            # finalizes its STT segments.
+            endpointing_ms=150,
             filler_words=True,        # keep "um/uh" so STT doesn't truncate
         )
     if key.startswith("groq-whisper-"):
@@ -187,14 +160,16 @@ def _build_llm(key: str):
 
 def _build_tts(key: str):
     if key.startswith("deepgram-"):
-        # Deepgram Aura TTS, forced into chunked-HTTP mode via subclass.
-        # The default WebSocket streaming path produces "flush audio
-        # emitter due to slow audio generation" warnings (chunks arrive
-        # late) and is unreliable on slower networks. Chunked HTTP
-        # (synthesize() path) returns the whole audio in one response
-        # at RTF ~0.7 — smooth phone playback.
+        # Deepgram Aura TTS — streaming WebSocket mode. Streaming is
+        # required for clean barge-in / interruption: when the user
+        # interrupts, the TTS stops generating mid-stream and the audio
+        # cleanly stops. With chunked HTTP, the full audio is already
+        # buffered, so cutting it produces audio crackle and the agent
+        # sounds like it ignored the interruption.
+        # 16 kHz instead of 24 kHz default — half the resampling cost
+        # for PSTN's 8 kHz μ-law output.
         model = key.removeprefix("deepgram-")
-        return _DeepgramAuraChunked(
+        return deepgram.TTS(
             model=model,
             sample_rate=16000,
             api_key=os.getenv("DEEPGRAM_API_KEY"),
@@ -384,28 +359,39 @@ async def entrypoint(ctx: JobContext):
             deactivation_threshold=0.15,
         )
 
+    # Use the v2-style TurnHandlingOptions API. This replaces the deprecated
+    # min_endpointing_delay / allow_interruptions / min_interruption_*
+    # constructor args, and unlocks `preemptive_tts` which starts TTS
+    # generation BEFORE the turn is confirmed — typically ~300ms latency win
+    # on top of the snappier endpointing.
     session = AgentSession(
         stt=_build_stt(stt_key, keyterms=keyterms),
         llm=_build_llm(llm_key),
         tts=_build_tts(tts_key),
         vad=vad,
-        # Barge-in: trigger on ANY confident word — Krisp filters real echo.
-        allow_interruptions=True,
-        min_interruption_duration=0.3,
-        min_interruption_words=1,
-        false_interruption_timeout=2.0,
-        # Tighter turn-detection — drops ~250ms of dead air per agent reply.
-        # 0.3s is the sweet spot: short enough to feel snappy, long enough
-        # not to interrupt mid-sentence on natural phone-call pauses.
-        min_endpointing_delay=0.3,
-        max_endpointing_delay=2.5,
-        # Disable the "user is away" auto-shutdown.  Default is 15s of
-        # silence which auto-ends the call — way too aggressive on PSTN.
-        user_away_timeout=None,
-        # AEC warmup: 0.3s instead of 1.0s. PSTN+Twilio has minimal echo,
-        # and the long warmup was causing "flush audio emitter" warnings
-        # at the start of the greeting (audio dropped during the lockout).
-        aec_warmup_duration=0.3,
+        user_away_timeout=None,    # don't auto-end on silence (PSTN can be quiet)
+        aec_warmup_duration=0.3,   # short — Twilio outbound has minimal echo
+        turn_handling={
+            "endpointing": {
+                "mode": "fixed",
+                "min_delay": 0.3,    # was 0.5 default → ~200ms faster reply
+                "max_delay": 2.5,
+            },
+            "interruption": {
+                "enabled": True,
+                "mode": "adaptive",     # ML-based — fewer false positives
+                "min_duration": 0.2,    # was 0.5 default → cuts off agent on shorter interrupts
+                "min_words": 0,         # don't gate on word count
+                "discard_audio_if_uninterruptible": True,
+                "resume_false_interruption": True,
+                "false_interruption_timeout": 2.0,
+            },
+            "preemptive_generation": {
+                "enabled": True,
+                "preemptive_tts": True,  # start TTS before turn confirmed → big latency win
+                "max_speech_duration": 10.0,
+            },
+        },
     )
 
     # Transcript collector → also broadcasts to data-channel for cockpit viewers.
