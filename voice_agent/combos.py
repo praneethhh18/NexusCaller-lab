@@ -2,15 +2,12 @@
 Preset stack combos for the precall config page.
 
 Each combo is a (label, stt, llm, tts) tuple where the keys are what the
-LiveKit Agent's plugin builder understands:
+LiveKit Agent's plugin builder understands.
 
-    STT keys: deepgram-nova-3 | deepgram-nova-2 | local-whisper-tiny
-    LLM keys: bedrock-<model-id> | gemini-<model> | openai-<model>
-              | ollama-<model> | groq-<model>
-    TTS keys: deepgram-aura-2-<voice> | elevenlabs-<model>
-              | piper-<voice>
-
-Combos are organized into three performance tiers below.
+Combos are organized by performance tier (fastest → quality → alts).
+The first entry is the default. All Bedrock models are referenced via
+their inference-profile id (us.<...>) which doesn't require a use-case
+form and works on-demand.
 """
 from __future__ import annotations
 
@@ -28,89 +25,115 @@ class Combo:
     badge: str = ""   # optional pill ("default", "fastest", ...)
 
 
-# First combo is the default — picked when no combo/stt/llm/tts is specified.
 PRESETS: list[Combo] = [
-    # ── ⚡ FASTEST — sub-700ms reply, lowest cost ────────────────────────
+    # ─── ⚡ FASTEST + CHEAPEST — best for high-volume sales outbound ────
     Combo(
-        key="fast-bedrock-haiku",
-        label="⚡ Fast · Claude Haiku 4.5",
-        description="Nova-3 STT · Claude Haiku 4.5 (Bedrock) · Aura-2 Asteria. ~600ms reply, $0.001/turn.",
+        key="fast-nova-micro",
+        label="⚡ Nova Micro",
+        description="Nova-3 STT · Amazon Nova Micro (Bedrock) · Aura-2. ~150ms first token, $0.035/1M in. Cheapest cloud LLM that still holds a conversation.",
         stt="deepgram-nova-3",
-        llm="bedrock-us.anthropic.claude-haiku-4-5-20251001-v1:0",
+        llm="bedrock-us.amazon.nova-micro-v1:0",
         tts="deepgram-aura-2-asteria-en",
         badge="default",
     ),
     Combo(
-        key="fast-bedrock-novalite",
-        label="⚡ Fast · Nova Lite",
-        description="Nova-3 STT · Amazon Nova Lite (Bedrock) · Aura-2 Asteria. ~500ms reply, cheapest.",
+        key="fast-llama-3b",
+        label="⚡ Llama 3.2 3B",
+        description="Nova-3 STT · Meta Llama 3.2 3B (Bedrock) · Aura-2. Open-weights small model, $0.15/1M, ~250ms first token. Sweet-spot for cost/quality.",
+        stt="deepgram-nova-3",
+        llm="bedrock-us.meta.llama3-2-3b-instruct-v1:0",
+        tts="deepgram-aura-2-asteria-en",
+        badge="open-source",
+    ),
+    Combo(
+        key="fast-nova-lite",
+        label="⚡ Nova Lite",
+        description="Nova-3 STT · Amazon Nova Lite (Bedrock) · Aura-2. Slight quality bump over Micro, $0.06/1M in.",
         stt="deepgram-nova-3",
         llm="bedrock-us.amazon.nova-lite-v1:0",
         tts="deepgram-aura-2-asteria-en",
-        badge="cheapest",
-    ),
-    Combo(
-        key="fast-bedrock-novamicro",
-        label="⚡ Ultra-fast · Nova Micro",
-        description="Nova-3 STT · Amazon Nova Micro (Bedrock) · Aura-2 Asteria. Tiny model, ~400ms, $0.000035/1k tok.",
-        stt="deepgram-nova-3",
-        llm="bedrock-us.amazon.nova-micro-v1:0",
-        tts="deepgram-aura-2-asteria-en",
-        badge="ultra-fast",
+        badge="cheap",
     ),
 
-    # ── ⚖️ BALANCED — best quality-per-latency for sales calls ──────────
+    # ─── ⚖️ BALANCED — when Nova Micro feels too short ──────────────────
     Combo(
-        key="balanced-bedrock-sonnet",
-        label="⚖️ Balanced · Claude Sonnet 4.5",
-        description="Nova-3 STT · Claude Sonnet 4.5 (Bedrock) · Aura-2 Asteria. ~900ms reply, sharper reasoning.",
+        key="balanced-llama-8b",
+        label="⚖️ Llama 3.1 8B",
+        description="Nova-3 STT · Meta Llama 3.1 8B (Bedrock) · Aura-2. Solid open-source, $0.22/1M, ~300ms. Best balance for B2B sales calls.",
         stt="deepgram-nova-3",
-        llm="bedrock-us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        llm="bedrock-us.meta.llama3-1-8b-instruct-v1:0",
         tts="deepgram-aura-2-asteria-en",
         badge="recommended",
     ),
     Combo(
-        key="balanced-bedrock-novapro",
-        label="⚖️ Balanced · Nova Pro",
-        description="Nova-3 STT · Amazon Nova Pro (Bedrock) · Aura-2 Asteria. Solid all-rounder.",
+        key="balanced-mistral-7b",
+        label="⚖️ Mistral 7B",
+        description="Nova-3 STT · Mistral 7B Instruct (Bedrock) · Aura-2. Classic 7B, $0.15/1M, decent reasoning.",
+        stt="deepgram-nova-3",
+        llm="bedrock-mistral.mistral-7b-instruct-v0:2",
+        tts="deepgram-aura-2-asteria-en",
+        badge="",
+    ),
+    Combo(
+        key="balanced-mixtral",
+        label="⚖️ Mixtral 8x7B (MoE)",
+        description="Nova-3 STT · Mistral Mixtral 8x7B (Bedrock) · Aura-2. Mixture-of-experts, fast for its capability.",
+        stt="deepgram-nova-3",
+        llm="bedrock-mistral.mixtral-8x7b-instruct-v0:1",
+        tts="deepgram-aura-2-asteria-en",
+        badge="",
+    ),
+    Combo(
+        key="balanced-nova-pro",
+        label="⚖️ Nova Pro",
+        description="Nova-3 STT · Amazon Nova Pro (Bedrock) · Aura-2. AWS's mid-tier, $0.80/1M.",
         stt="deepgram-nova-3",
         llm="bedrock-us.amazon.nova-pro-v1:0",
         tts="deepgram-aura-2-asteria-en",
         badge="",
     ),
 
-    # ── 🧠 HIGHEST QUALITY — when the conversation has to land ──────────
+    # ─── 🧠 QUALITY — high-stakes calls ─────────────────────────────────
     Combo(
-        key="quality-bedrock-opus",
-        label="🧠 Quality · Claude Opus 4",
-        description="Nova-3 STT · Claude Opus 4 (Bedrock) · Aura-2 Orion male. Best reasoning, ~1.4s reply.",
+        key="quality-llama-70b",
+        label="🧠 Llama 3.3 70B",
+        description="Nova-3 STT · Meta Llama 3.3 70B (Bedrock) · Aura-2 Orion. Best open-source 70B, $0.72/1M.",
         stt="deepgram-nova-3",
-        llm="bedrock-us.anthropic.claude-opus-4-1-20250805-v1:0",
+        llm="bedrock-us.meta.llama3-3-70b-instruct-v1:0",
         tts="deepgram-aura-2-orion-en",
-        badge="best quality",
+        badge="best open",
+    ),
+    Combo(
+        key="quality-claude-sonnet",
+        label="🧠 Claude Sonnet 4.5",
+        description="Nova-3 STT · Claude Sonnet 4.5 (Bedrock) · Aura-2 Orion. Best general reasoning, $3.00/1M (use sparingly).",
+        stt="deepgram-nova-3",
+        llm="bedrock-us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        tts="deepgram-aura-2-orion-en",
+        badge="premium",
     ),
 
-    # ── 🔁 ALTERNATIVES — used when Bedrock keys aren't set ──────────────
+    # ─── 🔁 ALTERNATIVES — when Bedrock isn't configured ────────────────
     Combo(
         key="alt-gemini-flash",
-        label="🔁 Alt · Gemini 2.5 Flash",
-        description="Nova-3 STT · Gemini 2.5 Flash · Aura-2 Asteria. Free Google API, no AWS needed.",
+        label="🔁 Gemini 2.5 Flash (free)",
+        description="Nova-3 STT · Gemini 2.5 Flash (Google AI Studio) · Aura-2. No AWS needed, free quota.",
         stt="deepgram-nova-3",
         llm="gemini-gemini-2.5-flash",
         tts="deepgram-aura-2-asteria-en",
         badge="free",
     ),
     Combo(
-        key="alt-ollama-local",
-        label="🔁 Alt · Ollama (local LLM)",
-        description="Nova-3 STT · Llama 3.1 8B local Ollama · Aura-2. Zero cloud-LLM cost (Ollama must be running).",
+        key="alt-ollama",
+        label="🔁 Ollama (local Llama 3.1 8B)",
+        description="Nova-3 STT · Llama 3.1 8B local · Aura-2. Zero LLM cost (Ollama running locally).",
         stt="deepgram-nova-3",
         llm="ollama-llama3.1:8b-instruct-q4_K_M",
         tts="deepgram-aura-2-asteria-en",
         badge="local LLM",
     ),
 
-    # ── 📦 OFFLINE — fully local, no cloud at all ────────────────────────
+    # ─── 📦 OFFLINE — fully local, no cloud at all ──────────────────────
     Combo(
         key="offline-local",
         label="📦 Offline · all-local stack",
@@ -135,41 +158,55 @@ STT_OPTIONS = [
 ]
 
 LLM_OPTIONS = [
-    # Bedrock — recommended primary
-    {"key": "bedrock-us.anthropic.claude-haiku-4-5-20251001-v1:0",
-                                          "label": "Bedrock · Claude Haiku 4.5  ★ default",
-     "group": "Cloud — AWS Bedrock"},
-    {"key": "bedrock-us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-                                          "label": "Bedrock · Claude Sonnet 4.5",
-     "group": "Cloud — AWS Bedrock"},
-    {"key": "bedrock-us.anthropic.claude-opus-4-1-20250805-v1:0",
-                                          "label": "Bedrock · Claude Opus 4",
-     "group": "Cloud — AWS Bedrock"},
-    {"key": "bedrock-us.amazon.nova-pro-v1:0",
-                                          "label": "Bedrock · Amazon Nova Pro",
-     "group": "Cloud — AWS Bedrock"},
-    {"key": "bedrock-us.amazon.nova-lite-v1:0",
-                                          "label": "Bedrock · Amazon Nova Lite  (cheapest)",
-     "group": "Cloud — AWS Bedrock"},
+    # Bedrock — fastest/cheapest first
     {"key": "bedrock-us.amazon.nova-micro-v1:0",
-                                          "label": "Bedrock · Amazon Nova Micro  (ultra-fast)",
-     "group": "Cloud — AWS Bedrock"},
+                                          "label": "Bedrock · Nova Micro  ★ default ($0.035/1M)",
+     "group": "Cloud — AWS Bedrock · Fast"},
+    {"key": "bedrock-us.meta.llama3-2-3b-instruct-v1:0",
+                                          "label": "Bedrock · Llama 3.2 3B  ($0.15/1M)",
+     "group": "Cloud — AWS Bedrock · Fast"},
+    {"key": "bedrock-us.amazon.nova-lite-v1:0",
+                                          "label": "Bedrock · Nova Lite  ($0.06/1M)",
+     "group": "Cloud — AWS Bedrock · Fast"},
+    # Bedrock — balanced
+    {"key": "bedrock-us.meta.llama3-1-8b-instruct-v1:0",
+                                          "label": "Bedrock · Llama 3.1 8B  ($0.22/1M)",
+     "group": "Cloud — AWS Bedrock · Balanced"},
+    {"key": "bedrock-mistral.mistral-7b-instruct-v0:2",
+                                          "label": "Bedrock · Mistral 7B  ($0.15/1M)",
+     "group": "Cloud — AWS Bedrock · Balanced"},
+    {"key": "bedrock-mistral.mixtral-8x7b-instruct-v0:1",
+                                          "label": "Bedrock · Mixtral 8x7B MoE  ($0.45/1M)",
+     "group": "Cloud — AWS Bedrock · Balanced"},
+    {"key": "bedrock-us.amazon.nova-pro-v1:0",
+                                          "label": "Bedrock · Nova Pro  ($0.80/1M)",
+     "group": "Cloud — AWS Bedrock · Balanced"},
+    # Bedrock — quality
     {"key": "bedrock-us.meta.llama3-3-70b-instruct-v1:0",
-                                          "label": "Bedrock · Meta Llama 3.3 70B",
-     "group": "Cloud — AWS Bedrock"},
+                                          "label": "Bedrock · Llama 3.3 70B  ($0.72/1M)",
+     "group": "Cloud — AWS Bedrock · Quality"},
+    {"key": "bedrock-us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+                                          "label": "Bedrock · Claude Sonnet 4.5  ($3.00/1M)",
+     "group": "Cloud — AWS Bedrock · Quality"},
+    {"key": "bedrock-us.anthropic.claude-haiku-4-5-20251001-v1:0",
+                                          "label": "Bedrock · Claude Haiku 4.5  ($0.80/1M, overpriced for voice)",
+     "group": "Cloud — AWS Bedrock · Quality"},
+    {"key": "bedrock-mistral.mistral-large-2402-v1:0",
+                                          "label": "Bedrock · Mistral Large  ($4.00/1M)",
+     "group": "Cloud — AWS Bedrock · Quality"},
     # Gemini — free fallback
-    {"key": "gemini-gemini-2.5-flash",    "label": "Gemini · 2.5 Flash  (free)",
+    {"key": "gemini-gemini-2.5-flash",    "label": "Gemini · 2.5 Flash  (free, fast)",
      "group": "Cloud — Google"},
-    {"key": "gemini-gemini-2.5-flash-lite", "label": "Gemini · 2.5 Flash Lite",
+    {"key": "gemini-gemini-2.5-flash-lite", "label": "Gemini · 2.5 Flash Lite  (free, cheaper)",
      "group": "Cloud — Google"},
-    {"key": "gemini-gemini-2.5-pro",      "label": "Gemini · 2.5 Pro  (best quality)",
+    {"key": "gemini-gemini-2.5-pro",      "label": "Gemini · 2.5 Pro  (free quality)",
      "group": "Cloud — Google"},
     # OpenAI
     {"key": "openai-gpt-4o-mini",         "label": "OpenAI · GPT-4o mini",
      "group": "Cloud — OpenAI"},
     {"key": "openai-gpt-4o",              "label": "OpenAI · GPT-4o",
      "group": "Cloud — OpenAI"},
-    # Groq (works only on networks where Groq's CDN isn't blocked)
+    # Groq (works on networks where Groq's CDN isn't blocked)
     {"key": "groq-llama-3.1-8b-instant",  "label": "Groq · Llama 3.1 8B  (CDN-blocked on some ISPs)",
      "group": "Cloud — Groq"},
     # Local Ollama
@@ -193,7 +230,7 @@ TTS_OPTIONS = [
      "group": "Cloud — Deepgram Aura"},
     {"key": "deepgram-aura-asteria-en",   "label": "Deepgram · Aura v1 Asteria  (legacy)",
      "group": "Cloud — Deepgram Aura"},
-    # ElevenLabs (locked on free tier — needs paid plan)
+    # ElevenLabs (free tier banned on this account — needs paid plan)
     {"key": "elevenlabs-eleven_turbo_v2_5",   "label": "ElevenLabs · Turbo v2.5  (paid plan)",
      "group": "Cloud — ElevenLabs"},
     {"key": "elevenlabs-eleven_flash_v2_5",   "label": "ElevenLabs · Flash v2.5  (paid plan)",

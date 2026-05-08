@@ -248,7 +248,7 @@ def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
     # residential ISPs aren't blocked, AWS-grade SLAs, no daily caps.
     # Gemini second (free, high RPM), then OpenAI, then Groq.
     candidates = [
-        ("AWS_SECRET_ACCESS_KEY", "bedrock-us.amazon.nova-lite-v1:0"),
+        ("AWS_SECRET_ACCESS_KEY", "bedrock-us.amazon.nova-micro-v1:0"),
         ("GEMINI_API_KEY",        "gemini-gemini-2.5-flash"),
         ("OPENAI_API_KEY",        "openai-gpt-4o-mini"),
         ("GROQ_API_KEY",          "groq-llama-3.1-8b-instant"),
