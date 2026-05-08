@@ -270,32 +270,34 @@ def _greeting(meta: dict) -> str:
 
 # ── SIP answer detection ─────────────────────────────────────────────────
 async def _wait_for_call_answered(participant, *, timeout: float) -> bool:
-    """Wait until the SIP leg is actually answered by the human, not just
-    "ringing". LiveKit sets `sip.callStatus = "active"` on the participant's
-    attributes when Twilio reports SIP 200 OK (= answered). We poll for that.
+    """Wait until the SIP leg is actually answered by the human (not just
+    ringing). LiveKit sets `sip.callStatus = "active"` on the participant's
+    attributes when Twilio/the trunk reports SIP 200 OK. We poll for that.
 
-    Falls back to "audio track subscribed" detection in case attribute
-    plumbing is delayed. Returns False on timeout."""
+    Returns True on answer, False on timeout. Logs every status transition
+    so we can see exactly what the trunk is reporting."""
     deadline = asyncio.get_event_loop().time() + timeout
-    answered_states = {"active", "automation"}  # automation = ringing-passed
+    last_status = "<unset>"
+    last_attrs_dump = ""
     while asyncio.get_event_loop().time() < deadline:
-        attrs = getattr(participant, "attributes", {}) or {}
-        status = attrs.get("sip.callStatus", "")
-        if status in answered_states:
-            logger.info(f"[vox] sip.callStatus = {status!r} — call answered")
+        attrs = dict(getattr(participant, "attributes", {}) or {})
+
+        # Log full attributes dict the first time we see it change — helps
+        # debug what the trunk is actually setting.
+        attrs_dump = ",".join(f"{k}={v}" for k, v in attrs.items())
+        if attrs_dump != last_attrs_dump:
+            logger.info(f"[vox] participant.attributes changed: {{{attrs_dump}}}")
+            last_attrs_dump = attrs_dump
+
+        status = attrs.get("sip.callStatus") or attrs.get("callStatus") or ""
+        if status != last_status:
+            logger.info(f"[vox] sip.callStatus: {last_status!r} -> {status!r}")
+            last_status = status
+        if status == "active":
             return True
-        # Fallback: an audio track being published means the SIP leg is up
-        # both ways — usually only happens after answer.
-        try:
-            for pub in (participant.track_publications or {}).values():
-                kind = getattr(pub, "kind", None)
-                # 1 == AUDIO in livekit.rtc; check both int and enum-name forms
-                if kind == 1 or str(kind).endswith("AUDIO"):
-                    logger.info("[vox] caller audio track published — call answered (fallback)")
-                    return True
-        except Exception:
-            pass
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.25)
+
+    logger.warning(f"[vox] answer timeout after {timeout}s (last status: {last_status!r})")
     return False
 
 
@@ -468,10 +470,32 @@ async def entrypoint(ctx: JobContext):
         logger.warning(f"[vox] wait_for_participant failed (continuing anyway): {e}")
 
     if sip_participant is not None:
-        answered = await _wait_for_call_answered(sip_participant, timeout=60.0)
-        if answered:
+        # Subscribe to attribute changes BEFORE polling, so we don't miss
+        # the moment sip.callStatus flips to "active" between polls.
+        answered_event = asyncio.Event()
+
+        @ctx.room.on("participant_attributes_changed")
+        def _on_attrs_changed(changed_attrs, p):
+            if p.identity != sip_participant.identity:
+                return
+            logger.info(f"[vox] caller attributes changed: {dict(changed_attrs)}")
+            status = changed_attrs.get("sip.callStatus", "")
+            if status == "active":
+                answered_event.set()
+
+        # Also check current state in case "active" was already set
+        try:
+            cur = dict(getattr(sip_participant, "attributes", {}) or {})
+            logger.info(f"[vox] caller initial attributes: {cur}")
+            if cur.get("sip.callStatus") == "active":
+                answered_event.set()
+        except Exception:
+            pass
+
+        try:
+            await asyncio.wait_for(answered_event.wait(), timeout=60.0)
             logger.info("[vox] caller answered — letting audio path settle…")
-        else:
+        except asyncio.TimeoutError:
             logger.warning("[vox] no answer within 60s — speaking anyway (voicemail or stuck dial)")
 
     # Settling pause: 0.5s after pickup so the caller has the phone fully
