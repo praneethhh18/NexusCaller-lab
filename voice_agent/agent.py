@@ -153,12 +153,11 @@ def _build_stt(key: str, *, keyterms: list[str] | None = None):
             interim_results=True,
             smart_format=True,
             keyterm=keyterms or [],
-            # 150ms — compromise between snappy turns and giving soft
-            # callers time to finish a thought. Final turn-end timing is
-            # actually controlled by turn_handling.endpointing.min_delay
-            # in AgentSession, so this just controls how soon Deepgram
-            # finalizes its STT segments.
-            endpointing_ms=150,
+            # 100ms — agressive end-of-speech detection so Deepgram
+            # finalizes transcripts ASAP. AgentSession's
+            # turn_handling.endpointing.min_delay still gates the
+            # actual reply trigger, so this is safe to lower.
+            endpointing_ms=100,
             filler_words=True,        # keep "um/uh" so STT doesn't truncate
         )
     if key.startswith("groq-whisper-"):
@@ -471,7 +470,7 @@ async def entrypoint(ctx: JobContext):
     if vad is None:
         vad = silero.VAD.load(
             sample_rate=8000,
-            min_silence_duration=0.4,
+            min_silence_duration=0.3,
             prefix_padding_duration=0.3,
             activation_threshold=0.30,
             deactivation_threshold=0.15,
@@ -492,8 +491,8 @@ async def entrypoint(ctx: JobContext):
         turn_handling={
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.3,    # was 0.5 default → ~200ms faster reply
-                "max_delay": 2.5,
+                "min_delay": 0.2,    # was 0.5 default → ~300ms faster reply
+                "max_delay": 2.0,    # cap dead-air patience
             },
             "interruption": {
                 "enabled": True,
@@ -819,7 +818,7 @@ def prewarm(proc):
     proc.userdata["vad"] = silero.VAD.load(
         sample_rate=8000,
         min_speech_duration=0.05,
-        min_silence_duration=0.4,
+        min_silence_duration=0.3,
         prefix_padding_duration=0.3,
         activation_threshold=0.30,
         deactivation_threshold=0.15,

@@ -29,22 +29,22 @@ PRESETS: list[Combo] = [
     # ─── ⚡ FASTEST + BEST VALUE (live-benchmarked) ──────────────────────
     # Numbers from voice_agent/bench_llms.py against this AWS account.
     Combo(
-        key="fast-llama-8b",
-        label="⚡ Llama 3.1 8B  (sweet spot)",
-        description="Nova-3 STT · Meta Llama 3.1 8B (Bedrock) · Aura-2. 656ms first token, $0.17/10k turns. Best cost-vs-latency balance for outbound sales.",
+        key="fast-llama-70b",
+        label="⚡ Llama 3.3 70B  (fastest)",
+        description="Nova-3 STT · Meta Llama 3.3 70B (Bedrock) · Aura-2. 535ms first token, $0.60/10k turns. Surprisingly the fastest Bedrock model in our benchmark.",
         stt="deepgram-nova-3",
-        llm="bedrock-us.meta.llama3-1-8b-instruct-v1:0",
+        llm="bedrock-us.meta.llama3-3-70b-instruct-v1:0",
         tts="deepgram-aura-2-asteria-en",
         badge="default",
     ),
     Combo(
-        key="fast-llama-70b",
-        label="⚡ Llama 3.3 70B  (fastest first-token)",
-        description="Nova-3 STT · Meta Llama 3.3 70B (Bedrock) · Aura-2. 535ms first token, $0.60/10k turns. Surprisingly faster than 8B on Bedrock.",
+        key="fast-llama-8b",
+        label="⚡ Llama 3.1 8B  (cheap+fast)",
+        description="Nova-3 STT · Meta Llama 3.1 8B (Bedrock) · Aura-2. 656ms first token, $0.17/10k turns. Best cost-per-turn.",
         stt="deepgram-nova-3",
-        llm="bedrock-us.meta.llama3-3-70b-instruct-v1:0",
+        llm="bedrock-us.meta.llama3-1-8b-instruct-v1:0",
         tts="deepgram-aura-2-asteria-en",
-        badge="fastest",
+        badge="cheapest fast",
     ),
     Combo(
         key="fast-nova-lite",
