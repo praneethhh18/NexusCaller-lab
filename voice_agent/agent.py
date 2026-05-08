@@ -30,6 +30,7 @@ from dotenv import load_dotenv
 from livekit.agents import (
     Agent, AgentSession, JobContext, WorkerOptions, cli,
 )
+from livekit.agents import tts as _lk_tts
 from livekit.plugins import cartesia, deepgram, elevenlabs, openai, silero
 from loguru import logger
 
@@ -155,11 +156,24 @@ def _build_tts(key: str):
     if key.startswith("deepgram-"):
         # Deepgram Aura TTS — uses the same DEEPGRAM_API_KEY as STT.
         # Voice key is the part after "deepgram-" (e.g. "aura-2-asteria-en").
+        # 16 kHz instead of the default 24 kHz — half the resampling work
+        # for PSTN's 8 kHz μ-law output.
+        # Force chunked HTTP path (not WebSocket): the streaming WS path
+        # was timing out / dropping audio mid-greeting on slower networks
+        # and giving "flush audio emitter due to slow audio generation"
+        # warnings. HTTP returns the whole response at once, which plays
+        # smoothly. Aura HTTP RTF ~0.7 — well under realtime.
         model = key.removeprefix("deepgram-")
-        return deepgram.TTS(
+        t = deepgram.TTS(
             model=model,
+            sample_rate=16000,
             api_key=os.getenv("DEEPGRAM_API_KEY"),
         )
+        # Tell AgentSession to use synthesize() (HTTP chunked) instead of
+        # stream() (WebSocket). The plugin advertises streaming=True by
+        # default, but the chunked path is more reliable.
+        t._capabilities = _lk_tts.TTSCapabilities(streaming=False)
+        return t
     if key.startswith("elevenlabs-"):
         model = key.removeprefix("elevenlabs-")
         return elevenlabs.TTS(
@@ -299,11 +313,18 @@ async def entrypoint(ctx: JobContext):
     # runtime which slowed the cold start AND crashed the worker if the
     # download failed. VAD-based turn detection works perfectly well for
     # English + Hinglish phone calls.
+    # Reuse the VAD weights loaded once in prewarm() — loading per-call
+    # causes a 1-2s spike + leaves Silero unable to keep up with realtime
+    # input on slower CPUs. Falls back to a fresh load if prewarm was skipped.
+    vad = ctx.proc.userdata.get("vad") if hasattr(ctx, "proc") else None
+    if vad is None:
+        vad = silero.VAD.load(sample_rate=8000, min_silence_duration=0.4)
+
     session = AgentSession(
         stt=_build_stt(stt_key, keyterms=keyterms),
         llm=_build_llm(llm_key),
         tts=_build_tts(tts_key),
-        vad=silero.VAD.load(),
+        vad=vad,
         # Barge-in: trigger on ANY confident word — Krisp filters real echo.
         allow_interruptions=True,
         min_interruption_duration=0.3,
@@ -566,7 +587,13 @@ def prewarm(proc):
     re-instantiated in the call process — but that's a 2-3 s init from
     a local file, not a 60+ s download.
     """
-    proc.userdata["vad"] = silero.VAD.load()
+    # 8 kHz matches the PSTN audio rate (skips upsampling) and roughly
+    # halves Silero's per-frame inference cost — fixes "inference is
+    # slower than realtime" warnings on slower CPUs.
+    proc.userdata["vad"] = silero.VAD.load(
+        sample_rate=8000,
+        min_silence_duration=0.4,
+    )
 
     if os.getenv("LOCAL_OSS_PREWARM", "1") != "0":
         try:
