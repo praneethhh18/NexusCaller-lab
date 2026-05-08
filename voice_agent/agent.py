@@ -30,6 +30,8 @@ from dotenv import load_dotenv
 from livekit.agents import (
     Agent, AgentSession, JobContext, WorkerOptions, cli,
 )
+from livekit.agents import llm as _lk_llm
+from livekit.agents._exceptions import APIStatusError
 from livekit.plugins import cartesia, deepgram, elevenlabs, openai, silero
 from loguru import logger
 
@@ -39,6 +41,102 @@ from voice_agent.summary import summarise_transcript
 
 
 load_dotenv()
+
+
+# ── Fallback LLM wrapper ─────────────────────────────────────────────────
+class _FallbackLLM(_lk_llm.LLM):
+    """An LLM that tries each provider in order, falling back to the next
+    on rate-limit / model-deprecated / quota errors.
+
+    Why we need this: SambaNova's free tier has tight per-minute limits
+    (~5-10 RPM). One bad burst of preemptive generation calls and the
+    whole call dies with `failed to generate LLM completion after
+    4 attempts`. Instead, fail over to Gemini, then Groq, etc.
+    """
+
+    _RETRYABLE_STATUSES = {429, 410, 503}  # rate-limit, deprecated, unavailable
+
+    def __init__(self, providers: list[_lk_llm.LLM]):
+        super().__init__()
+        if not providers:
+            raise ValueError("_FallbackLLM needs at least one provider")
+        self._providers = providers
+
+    @property
+    def model(self) -> str:
+        return self._providers[0].model
+
+    @property
+    def provider(self) -> str:
+        labels = ",".join(p.provider for p in self._providers)
+        return f"fallback[{labels}]"
+
+    def chat(self, **kwargs) -> _lk_llm.LLMStream:
+        return _FallbackLLMStream(
+            llm=self,
+            providers=self._providers,
+            retryable=self._RETRYABLE_STATUSES,
+            chat_ctx=kwargs.pop("chat_ctx"),
+            tools=kwargs.pop("tools", None) or [],
+            conn_options=kwargs.pop("conn_options"),
+            extra_kwargs=kwargs,
+        )
+
+    def prewarm(self) -> None:
+        for p in self._providers:
+            try:
+                p.prewarm()
+            except Exception:
+                pass
+
+    async def aclose(self) -> None:
+        for p in self._providers:
+            try:
+                await p.aclose()
+            except Exception:
+                pass
+
+
+class _FallbackLLMStream(_lk_llm.LLMStream):
+    def __init__(self, *, providers, retryable, extra_kwargs, **kw):
+        super().__init__(**kw)
+        self._providers = providers
+        self._retryable = retryable
+        self._extra_kwargs = extra_kwargs
+
+    async def _run(self) -> None:
+        last_err: Exception | None = None
+        for i, prov in enumerate(self._providers):
+            try:
+                stream = prov.chat(
+                    chat_ctx=self._chat_ctx,
+                    tools=self._tools,
+                    conn_options=self._conn_options,
+                    **self._extra_kwargs,
+                )
+                async for chunk in stream:
+                    self._event_ch.send_nowait(chunk)
+                return  # success — done
+            except APIStatusError as e:
+                last_err = e
+                if e.status_code in self._retryable and i < len(self._providers) - 1:
+                    logger.warning(
+                        f"[fallback-llm] provider {prov.provider}/{prov.model} "
+                        f"returned {e.status_code} — falling back to next provider"
+                    )
+                    continue
+                raise
+            except Exception as e:
+                last_err = e
+                if i < len(self._providers) - 1:
+                    logger.warning(
+                        f"[fallback-llm] provider {prov.provider}/{prov.model} "
+                        f"errored ({type(e).__name__}) — falling back"
+                    )
+                    continue
+                raise
+        if last_err:
+            raise last_err
 
 
 # ── Plugin builders ──────────────────────────────────────────────────────
@@ -156,6 +254,48 @@ def _build_llm(key: str):
             api_key=api_key,
         )
     raise ValueError(f"Unknown LLM key: {key!r}")
+
+
+def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
+    """Build the primary LLM and tack on a fallback chain that kicks in
+    on rate-limit / quota / deprecated-model errors. The chain is
+    composed only of providers whose API key is present in .env so we
+    don't waste a fallback slot on something that'll fail auth too."""
+    primary = _build_llm(primary_key)
+    chain: list[_lk_llm.LLM] = [primary]
+
+    # Don't double-add the primary's provider in the fallback chain
+    primary_prefix = primary_key.split("-", 1)[0]
+
+    # Order of preference for fallback when primary fails. Each entry
+    # is (env-var-to-check, llm-key-to-build).
+    # Gemini is first because it usually has the highest free RPM and
+    # works on Indian residential ISPs. Then SambaNova 70B (different
+    # rate-limit pool from Maverick), then OpenAI, then Groq.
+    candidates = [
+        ("GEMINI_API_KEY",     "gemini-gemini-2.5-flash"),
+        ("SAMBANOVA_API_KEY",  "sambanova-Meta-Llama-3.3-70B-Instruct"),
+        ("OPENAI_API_KEY",     "openai-gpt-4o-mini"),
+        ("GROQ_API_KEY",       "groq-llama-3.1-8b-instant"),
+    ]
+    for env_key, fallback_key in candidates:
+        if not os.getenv(env_key):
+            continue
+        if fallback_key.startswith(primary_prefix + "-"):
+            continue  # don't fall back to the same provider as primary
+        try:
+            chain.append(_build_llm(fallback_key))
+        except Exception as e:
+            logger.warning(f"[fallback-llm] couldn't build {fallback_key!r}: {e}")
+
+    if len(chain) == 1:
+        return primary  # no fallback configured — return as-is
+
+    logger.info(
+        f"[fallback-llm] chain: " +
+        " → ".join(f"{p.provider}/{p.model}" for p in chain)
+    )
+    return _FallbackLLM(chain)
 
 
 def _build_tts(key: str):
@@ -366,7 +506,7 @@ async def entrypoint(ctx: JobContext):
     # on top of the snappier endpointing.
     session = AgentSession(
         stt=_build_stt(stt_key, keyterms=keyterms),
-        llm=_build_llm(llm_key),
+        llm=_build_llm_with_fallback(llm_key),
         tts=_build_tts(tts_key),
         vad=vad,
         user_away_timeout=None,    # don't auto-end on silence (PSTN can be quiet)
@@ -387,8 +527,14 @@ async def entrypoint(ctx: JobContext):
                 "false_interruption_timeout": 2.0,
             },
             "preemptive_generation": {
+                # Preemptive LLM (warms up the model on partial transcripts)
+                # is still on — keeps latency low. But preemptive_tts and
+                # high retry counts caused us to burn through SambaNova's
+                # free-tier RPM (~5-10 req/min) by firing 3-4 LLM calls
+                # per user turn.
                 "enabled": True,
-                "preemptive_tts": True,  # start TTS before turn confirmed → big latency win
+                "preemptive_tts": False,   # don't pre-generate audio — too many LLM calls
+                "max_retries": 1,          # one preemptive attempt per turn (not 3)
                 "max_speech_duration": 10.0,
             },
         },
