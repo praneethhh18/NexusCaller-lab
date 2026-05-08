@@ -268,6 +268,37 @@ def _greeting(meta: dict) -> str:
     )
 
 
+# ── SIP answer detection ─────────────────────────────────────────────────
+async def _wait_for_call_answered(participant, *, timeout: float) -> bool:
+    """Wait until the SIP leg is actually answered by the human, not just
+    "ringing". LiveKit sets `sip.callStatus = "active"` on the participant's
+    attributes when Twilio reports SIP 200 OK (= answered). We poll for that.
+
+    Falls back to "audio track subscribed" detection in case attribute
+    plumbing is delayed. Returns False on timeout."""
+    deadline = asyncio.get_event_loop().time() + timeout
+    answered_states = {"active", "automation"}  # automation = ringing-passed
+    while asyncio.get_event_loop().time() < deadline:
+        attrs = getattr(participant, "attributes", {}) or {}
+        status = attrs.get("sip.callStatus", "")
+        if status in answered_states:
+            logger.info(f"[vox] sip.callStatus = {status!r} — call answered")
+            return True
+        # Fallback: an audio track being published means the SIP leg is up
+        # both ways — usually only happens after answer.
+        try:
+            for pub in (participant.track_publications or {}).values():
+                kind = getattr(pub, "kind", None)
+                # 1 == AUDIO in livekit.rtc; check both int and enum-name forms
+                if kind == 1 or str(kind).endswith("AUDIO"):
+                    logger.info("[vox] caller audio track published — call answered (fallback)")
+                    return True
+        except Exception:
+            pass
+        await asyncio.sleep(0.2)
+    return False
+
+
 # ── Main entrypoint ──────────────────────────────────────────────────────
 async def entrypoint(ctx: JobContext):
     """Called by LiveKit when a new job is dispatched to this worker."""
@@ -419,16 +450,33 @@ async def entrypoint(ctx: JobContext):
     # Indian mobile carriers it can be 1-2 seconds.  If we speak too soon,
     # the caller still has the phone moving toward their ear and misses
     # the start of the greeting.
+    # Two-phase wait:
+    #
+    #   1. wait_for_participant() — SIP leg established, participant joins
+    #      room. The phone is now RINGING but caller hasn't picked up yet.
+    #
+    #   2. _wait_for_call_answered() — wait for sip.callStatus == "active"
+    #      (set by LiveKit when Twilio reports SIP 200 OK = answered).
+    #      Without this, we'd greet into a ringing phone and the caller
+    #      hears nothing when they finally pick up.
     logger.info(f"[vox] waiting for SIP participant to join room {ctx.room.name}")
+    sip_participant = None
     try:
-        await ctx.wait_for_participant()
-        logger.info("[vox] caller joined — letting audio path settle…")
+        sip_participant = await ctx.wait_for_participant()
+        logger.info(f"[vox] SIP leg established (identity={sip_participant.identity}) — waiting for caller to pick up…")
     except Exception as e:
         logger.warning(f"[vox] wait_for_participant failed (continuing anyway): {e}")
 
-    # Settling pause: 0.6s gives the carrier audio path time to lock in.
-    # Dropped from 1.5s — felt too long on calls where caller answered fast.
-    await asyncio.sleep(0.6)
+    if sip_participant is not None:
+        answered = await _wait_for_call_answered(sip_participant, timeout=60.0)
+        if answered:
+            logger.info("[vox] caller answered — letting audio path settle…")
+        else:
+            logger.warning("[vox] no answer within 60s — speaking anyway (voicemail or stuck dial)")
+
+    # Settling pause: 0.5s after pickup so the caller has the phone fully
+    # to their ear and the carrier audio path is bidirectional.
+    await asyncio.sleep(0.5)
     logger.info("[vox] speaking greeting")
     await session.say(_greeting(meta))
 
@@ -555,14 +603,19 @@ async def entrypoint(ctx: JobContext):
 
     # When the caller hangs up, end the call promptly. Without this, the
     # agent keeps the room open until LiveKit's idle timeout fires — which
-    # can take 30-60s. We watch for the SIP participant disconnecting and
-    # ask the JobContext to shut down, which triggers _on_shutdown above.
+    # can take 30-60s. ctx.shutdown() is SYNCHRONOUS in livekit-agents
+    # 1.5.x — it just signals the worker to start shutdown; the registered
+    # _on_shutdown coroutine runs from the worker's main loop.
     @ctx.room.on("participant_disconnected")
     def _on_caller_disconnect(participant):
         identity = getattr(participant, "identity", "")
-        if identity.startswith("caller-"):
-            logger.info(f"[vox] caller disconnected (identity={identity}) — ending call")
-            asyncio.create_task(ctx.shutdown(reason="caller_hangup"))
+        if not identity.startswith("caller-"):
+            return
+        logger.info(f"[vox] caller disconnected (identity={identity}) — ending call")
+        try:
+            ctx.shutdown(reason="caller_hangup")
+        except Exception as e:
+            logger.warning(f"[vox] ctx.shutdown() failed: {e}")
 
 
 async def _post_callback(url: str, payload: dict, *, attempts: int = 3) -> None:
