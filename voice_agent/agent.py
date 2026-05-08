@@ -227,15 +227,21 @@ def _build_llm(key: str):
             api_key=os.getenv("NVIDIA_API_KEY") or "not-set",
         )
     if key.startswith("bedrock-"):
-        # AWS Bedrock — Anthropic Claude, Amazon Nova, Meta Llama via
-        # inference profiles. No use-case form needed. Pay-per-token.
-        # Set AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY + AWS_REGION in .env.
-        # Model id is everything after "bedrock-", e.g.
-        #   bedrock-us.anthropic.claude-haiku-4-5-20251001-v1:0
+        # AWS Bedrock — auto-routes region from the inference-profile prefix:
+        #   us.<...>    → us-east-1   (default)
+        #   apac.<...>  → ap-south-1  (Mumbai — best for Indian ISPs)
+        # Other prefixes use AWS_REGION from .env.
+        # Pay-per-token, no use-case form needed for these inference profiles.
         model = key.removeprefix("bedrock-")
+        if model.startswith("apac."):
+            region = "ap-south-1"
+        elif model.startswith("us."):
+            region = "us-east-1"
+        else:
+            region = os.getenv("AWS_REGION", "us-east-1")
         return lk_aws.LLM(
             model=model,
-            region=os.getenv("AWS_REGION", "us-east-1"),
+            region=region,
             api_key=os.getenv("AWS_ACCESS_KEY_ID"),
             api_secret=os.getenv("AWS_SECRET_ACCESS_KEY"),
         )
@@ -261,10 +267,14 @@ def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
     # NVIDIA NIM gets first fallback slot — H100 hosting, OpenAI-compat,
     # not Cloudflare-blocked from Indian ISPs. Then Bedrock 70B / 8B
     # (slower but reliable), then free Gemini, then OpenAI, then Groq.
+    # Live-benchmarked from this network. NVIDIA NIM (US H100) wins on
+    # latency. Mumbai Bedrock (ap-south-1) is the second-fastest because
+    # it's geographically closest to Indian ISPs. us-east-1 is third —
+    # variable network sometimes makes it slowest.
     candidates = [
-        ("NVIDIA_API_KEY",        "nvidia-meta/llama-3.1-8b-instruct"),
+        ("NVIDIA_API_KEY",        "nvidia-meta/llama-3.3-70b-instruct"),
+        ("AWS_SECRET_ACCESS_KEY", "bedrock-apac.amazon.nova-lite-v1:0"),
         ("AWS_SECRET_ACCESS_KEY", "bedrock-us.meta.llama3-1-8b-instruct-v1:0"),
-        ("AWS_SECRET_ACCESS_KEY", "bedrock-us.amazon.nova-lite-v1:0"),
         ("GEMINI_API_KEY",        "gemini-gemini-2.5-flash"),
         ("OPENAI_API_KEY",        "openai-gpt-4o-mini"),
         ("GROQ_API_KEY",          "groq-llama-3.1-8b-instant"),
