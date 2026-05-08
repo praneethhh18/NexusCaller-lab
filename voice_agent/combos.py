@@ -27,15 +27,24 @@ class Combo:
 
 PRESETS: list[Combo] = [
     # ─── ⚡ FASTEST + BEST VALUE (live-benchmarked) ──────────────────────
-    # Numbers from voice_agent/bench_llms.py against this AWS account.
+    # Numbers from voice_agent/bench_llms.py + _bench_nvidia.py.
+    Combo(
+        key="fast-nvidia-70b",
+        label="🚀 Llama 3.3 70B (NVIDIA NIM, H100)",
+        description="Nova-3 STT · Llama 3.3 70B on NVIDIA H100 GPUs · Aura-2. 367ms first token (31% faster than Bedrock). Free $1000 credits.",
+        stt="deepgram-nova-3",
+        llm="nvidia-meta/llama-3.3-70b-instruct",
+        tts="deepgram-aura-2-asteria-en",
+        badge="default",
+    ),
     Combo(
         key="fast-llama-70b",
-        label="⚡ Llama 3.3 70B  (fastest)",
-        description="Nova-3 STT · Meta Llama 3.3 70B (Bedrock) · Aura-2. 535ms first token, $0.60/10k turns. Surprisingly the fastest Bedrock model in our benchmark.",
+        label="⚡ Llama 3.3 70B (Bedrock)",
+        description="Nova-3 STT · Meta Llama 3.3 70B (Bedrock) · Aura-2. 530ms first token, $0.60/10k turns.",
         stt="deepgram-nova-3",
         llm="bedrock-us.meta.llama3-3-70b-instruct-v1:0",
         tts="deepgram-aura-2-asteria-en",
-        badge="default",
+        badge="bedrock",
     ),
     Combo(
         key="fast-llama-8b",
@@ -75,16 +84,7 @@ PRESETS: list[Combo] = [
         tts="deepgram-aura-2-asteria-en",
         badge="cheapest of all",
     ),
-    # ─── 🚀 NVIDIA NIM — H100-hosted, often beats Bedrock ──────────────
-    Combo(
-        key="nvidia-llama-70b",
-        label="🚀 NVIDIA · Llama 3.3 70B (H100)",
-        description="Nova-3 STT · Meta Llama 3.3 70B on NVIDIA NIM · Aura-2. H100 GPUs, free $1000 credits. Should beat Bedrock 70B latency. Sign up at build.nvidia.com.",
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
-        tts="deepgram-aura-2-asteria-en",
-        badge="NIM",
-    ),
+    # ─── 🚀 More NVIDIA NIM options ────────────────────────────────────
     Combo(
         key="nvidia-llama-8b",
         label="🚀 NVIDIA · Llama 3.1 8B (H100)",
