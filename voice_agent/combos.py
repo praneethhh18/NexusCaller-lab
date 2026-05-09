@@ -73,45 +73,33 @@ PRESETS: list[Combo] = [
     ),
 
     # ═════════════════════════════════════════════════════════════════
-    # 🚀 NVIDIA NIM — H100-hosted, fastest from this network (~388ms)
+    # 🚀 NVIDIA NIM — H100-hosted, fastest from this network
+    # All combos pair with Cartesia Sonic-2 for emotional voice
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="nvidia-llama-70b",
-        label="🚀 NVIDIA · Llama 3.3 70B",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: NVIDIA NIM Llama 3.3 70B (H100, ~388ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria"
-        ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
-        tts="deepgram-aura-2-asteria-en",
-        badge="fastest · flat voice",
-    ),
-    Combo(
-        key="nvidia-nemotron-70b",
-        label="🚀 NVIDIA · Nemotron 70B (tuned)",
+        key="nvidia-nemotron-cartesia",
+        label="🚀 NVIDIA · Nemotron 70B (tuned for chat)",
         description=(
             "STT: Deepgram Nova-3  →  "
             "LLM: NVIDIA NIM Nemotron 70B (NVIDIA-tuned for chat)  →  "
-            "TTS: Deepgram Aura-2 Asteria"
+            "TTS: Cartesia Sonic-2"
         ),
         stt="deepgram-nova-3",
         llm="nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
-        tts="deepgram-aura-2-asteria-en",
+        tts="cartesia-sonic-2",
         badge="NVIDIA-tuned",
     ),
     Combo(
-        key="nvidia-llama-8b",
-        label="🚀 NVIDIA · Llama 3.1 8B",
+        key="nvidia-llama8b-cartesia",
+        label="🚀 NVIDIA · Llama 3.1 8B (cheaper)",
         description=(
             "STT: Deepgram Nova-3  →  "
             "LLM: NVIDIA NIM Llama 3.1 8B  →  "
-            "TTS: Deepgram Aura-2 Asteria"
+            "TTS: Cartesia Sonic-2"
         ),
         stt="deepgram-nova-3",
         llm="nvidia-meta/llama-3.1-8b-instruct",
-        tts="deepgram-aura-2-asteria-en",
+        tts="cartesia-sonic-2",
         badge="cheaper NIM",
     ),
 
@@ -119,42 +107,29 @@ PRESETS: list[Combo] = [
     # 🇮🇳 AWS Bedrock Mumbai (ap-south-1) — geographically closest
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="bedrock-nova-lite",
-        label="🇮🇳 Bedrock Mumbai · Nova Lite",
+        key="bedrock-novalite-cartesia",
+        label="🇮🇳 Bedrock Mumbai · Nova Lite (cheapest cloud)",
         description=(
             "STT: Deepgram Nova-3  →  "
             "LLM: Amazon Nova Lite via Bedrock ap-south-1 (~812ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. $0.05/10k turns."
+            "TTS: Cartesia Sonic-2. $0.05/10k turns."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-lite-v1:0",
-        tts="deepgram-aura-2-asteria-en",
+        tts="cartesia-sonic-2",
         badge="cheap fast",
     ),
     Combo(
-        key="bedrock-nova-pro",
-        label="🇮🇳 Bedrock Mumbai · Nova Pro",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: Amazon Nova Pro via Bedrock ap-south-1 (~848ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. Better reasoning than Lite."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-apac.amazon.nova-pro-v1:0",
-        tts="deepgram-aura-2-asteria-en",
-        badge="balanced",
-    ),
-    Combo(
-        key="bedrock-nova-micro",
+        key="bedrock-novamicro-cartesia",
         label="🇮🇳 Bedrock Mumbai · Nova Micro",
         description=(
             "STT: Deepgram Nova-3  →  "
-            "LLM: Amazon Nova Micro via Bedrock ap-south-1 (~848ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. $0.03/10k turns — cheapest."
+            "LLM: Amazon Nova Micro via Bedrock ap-south-1  →  "
+            "TTS: Cartesia Sonic-2. $0.03/10k turns — cheapest LLM."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-micro-v1:0",
-        tts="deepgram-aura-2-asteria-en",
+        tts="cartesia-sonic-2",
         badge="cheapest",
     ),
 
@@ -164,53 +139,41 @@ PRESETS: list[Combo] = [
     # worker is deployed to AWS / any non-blocked network.
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="groq-llama-8b",
-        label="🌐 Groq · Llama 3.1 8B Instant  (EC2-only)",
+        key="groq-llama70b-cartesia",
+        label="🌐 Groq · Llama 3.3 70B  (EC2-only)",
         description=(
             "STT: Deepgram Nova-3  →  "
-            "LLM: Groq Llama 3.1 8B (~150ms — LPU silicon)  →  "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Blocked from Indian ISPs; works once deployed to a cloud VM."
-        ),
-        stt="deepgram-nova-3",
-        llm="groq-llama-3.1-8b-instant",
-        tts="deepgram-aura-2-asteria-en",
-        badge="fastest if unblocked",
-    ),
-    Combo(
-        key="groq-llama-70b",
-        label="🌐 Groq · Llama 3.3 70B Versatile  (EC2-only)",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: Groq Llama 3.3 70B Versatile (~250ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. "
+            "LLM: Groq Llama 3.3 70B Versatile (~250ms — LPU silicon)  →  "
+            "TTS: Cartesia Sonic-2. "
             "Blocked from Indian ISPs; works once deployed to a cloud VM."
         ),
         stt="deepgram-nova-3",
         llm="groq-llama-3.3-70b-versatile",
-        tts="deepgram-aura-2-asteria-en",
+        tts="cartesia-sonic-2",
         badge="EC2-only",
     ),
 
     # ═════════════════════════════════════════════════════════════════
     # 📦 Local — runs on your machine, no cloud LLM calls
+    # Local-offline kept for users who want zero cloud dependencies;
+    # uses Piper (offline TTS) since Cartesia needs internet.
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="local-ollama",
-        label="📦 Local · Ollama Llama 3.1 8B",
+        key="local-ollama-cartesia",
+        label="📦 Local LLM + Cartesia voice",
         description=(
             "STT: Deepgram Nova-3  →  "
             "LLM: Llama 3.1 8B running locally on Ollama  →  "
-            "TTS: Deepgram Aura-2 Asteria. Zero LLM cost, latency = your CPU."
+            "TTS: Cartesia Sonic-2. Zero LLM cost, latency = your CPU."
         ),
         stt="deepgram-nova-3",
         llm="ollama-llama3.1:8b-instruct-q4_K_M",
-        tts="deepgram-aura-2-asteria-en",
+        tts="cartesia-sonic-2",
         badge="local LLM",
     ),
     Combo(
         key="local-offline",
-        label="📦 Offline · all-local stack",
+        label="📦 Offline · all-local stack (no internet needed)",
         description=(
             "STT: faster-whisper tiny on CPU  →  "
             "LLM: Qwen2.5 0.5B on Ollama  →  "
@@ -276,27 +239,22 @@ LLM_OPTIONS = [
 ]
 
 TTS_OPTIONS = [
-    # Cartesia first — emotionally expressive, our new default
+    # Cartesia first — emotionally expressive, our default and primary recommendation
     {"key": "cartesia-sonic-2",            "label": "Sonic-2  (expressive, <100ms streaming) ★",
      "group": "Cloud — Cartesia"},
     {"key": "cartesia-sonic-english",      "label": "Sonic English  (older, also fast)",
      "group": "Cloud — Cartesia"},
 
-    {"key": "deepgram-aura-2-asteria-en", "label": "Aura-2 Asteria  (US female, flat)",
-     "group": "Cloud — Deepgram Aura"},
-    {"key": "deepgram-aura-2-thalia-en",  "label": "Aura-2 Thalia  (US female warm)",
-     "group": "Cloud — Deepgram Aura"},
-    {"key": "deepgram-aura-2-luna-en",    "label": "Aura-2 Luna  (US female soft)",
-     "group": "Cloud — Deepgram Aura"},
-    {"key": "deepgram-aura-2-orion-en",   "label": "Aura-2 Orion  (US male)",
-     "group": "Cloud — Deepgram Aura"},
-    {"key": "elevenlabs-eleven_turbo_v2_5",   "label": "Turbo v2.5  (paid plan)",
+    # ElevenLabs kept as a paid alternative for users who want voice-cloning
+    {"key": "elevenlabs-eleven_turbo_v2_5",   "label": "Turbo v2.5  (paid plan, voice cloning)",
      "group": "Cloud — ElevenLabs"},
     {"key": "elevenlabs-eleven_flash_v2_5",   "label": "Flash v2.5  (paid plan)",
      "group": "Cloud — ElevenLabs"},
-    {"key": "piper-en_US-lessac-medium",  "label": "Piper lessac  (US female, offline)",
+
+    # Local / offline only — Piper is the only zero-cloud TTS
+    {"key": "piper-en_US-lessac-medium",  "label": "Piper lessac  (offline only)",
      "group": "Local — Piper"},
-    {"key": "piper-en_US-ryan-high",      "label": "Piper ryan-high  (US male, offline)",
+    {"key": "piper-en_US-ryan-high",      "label": "Piper ryan-high  (offline only)",
      "group": "Local — Piper"},
 ]
 
