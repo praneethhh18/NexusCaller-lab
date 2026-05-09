@@ -170,6 +170,7 @@ async def api_catalog():
         "combos": [{
             "key": c.key, "label": c.label, "description": c.description,
             "stt": c.stt, "llm": c.llm, "tts": c.tts, "badge": c.badge,
+            "quality": c.quality,
         } for c in PRESETS],
         "stt": STT_OPTIONS,
         "llm": LLM_OPTIONS,

@@ -99,12 +99,35 @@
     border-color: var(--accent);
     background: color-mix(in srgb, var(--accent) 10%, var(--surface-1));
   }
-  .combo .name { font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+  .combo .name { font-weight: 600; font-size: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .combo .badge {
     font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
     padding: 2px 7px; border-radius: 10px;
     background: color-mix(in srgb, var(--accent) 20%, transparent);
     color: var(--accent);
+  }
+  /* Quality pill — visual ranking of overall pipeline quality.
+     bestest / best / average each get distinct color so users can scan
+     the list and find a top-tier pipeline at a glance. */
+  .combo .quality {
+    font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px;
+    padding: 2px 8px; border-radius: 10px;
+    border: 1px solid transparent;
+  }
+  .combo .quality.bestest {
+    background: color-mix(in srgb, gold 18%, transparent);
+    color: #C9A227;
+    border-color: color-mix(in srgb, gold 35%, transparent);
+  }
+  .combo .quality.best {
+    background: color-mix(in srgb, #10B981 16%, transparent);
+    color: #10B981;
+    border-color: color-mix(in srgb, #10B981 32%, transparent);
+  }
+  .combo .quality.average {
+    background: color-mix(in srgb, #94A3B8 20%, transparent);
+    color: #94A3B8;
+    border-color: color-mix(in srgb, #94A3B8 35%, transparent);
   }
   .combo .desc { font-size: 11.5px; color: var(--muted); line-height: 1.45; }
 
@@ -347,7 +370,7 @@ function renderCombos() {
     btn.className = 'combo';
     btn.dataset.key = combo.key;
     btn.innerHTML = `
-      <div class="name">${combo.label}${combo.badge ? `<span class="badge">${combo.badge}</span>` : ''}</div>
+      <div class="name">${combo.label}${combo.quality ? `<span class="quality ${combo.quality}">${combo.quality}</span>` : ''}${combo.badge ? `<span class="badge">${combo.badge}</span>` : ''}</div>
       <div class="desc">${combo.description}</div>
     `;
     btn.onclick = () => selectCombo(combo.key);

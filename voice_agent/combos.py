@@ -29,6 +29,11 @@ class Combo:
     llm: str          # plugin key for LLM
     tts: str          # plugin key for TTS
     badge: str = ""   # optional pill ("default", "cheapest", ...)
+    # Subjective overall pipeline quality. One of:
+    #   "bestest"  — top-tier production. Best STT + best LLM + best TTS.
+    #   "best"     — strong production pick with one tradeoff (cost / region / EC2).
+    #   "average"  — viable but compromised (older STT, cheaper LLM, or flatter TTS).
+    quality: str = "average"
 
 
 # Default = first entry. Picked when no combo/stt/llm/tts is specified.
@@ -63,6 +68,7 @@ PRESETS: list[Combo] = [
         llm="nvidia-meta/llama-3.3-70b-instruct",
         tts="cartesia-sonic-2",
         badge="default · premium",
+        quality="bestest",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -80,6 +86,7 @@ PRESETS: list[Combo] = [
         llm="bedrock-apac.amazon.nova-pro-v1:0",
         tts="cartesia-sonic-2",
         badge="India region",
+        quality="best",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -100,6 +107,7 @@ PRESETS: list[Combo] = [
         llm="groq-llama-3.3-70b-versatile",
         tts="elevenlabs-eleven_flash_v2_5",
         badge="EC2-only · fastest",
+        quality="best",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -119,6 +127,7 @@ PRESETS: list[Combo] = [
         llm="bedrock-apac.amazon.nova-micro-v1:0",
         tts="deepgram-aura-2-asteria-en",
         badge="cheapest",
+        quality="average",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -138,6 +147,7 @@ PRESETS: list[Combo] = [
         llm="nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
         tts="elevenlabs-eleven_turbo_v2_5",
         badge="smartest · paid TTS",
+        quality="bestest",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -157,6 +167,7 @@ PRESETS: list[Combo] = [
         llm="nvidia-meta/llama-3.3-70b-instruct",
         tts="cartesia-sonic-2",
         badge="EC2-only · STT test",
+        quality="best",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -175,6 +186,7 @@ PRESETS: list[Combo] = [
         llm="bedrock-apac.amazon.nova-lite-v1:0",
         tts="deepgram-aura-2-thalia-en",
         badge="balanced India",
+        quality="average",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -194,6 +206,7 @@ PRESETS: list[Combo] = [
         llm="ollama-llama3.1:8b-instruct-q4_K_M",
         tts="cartesia-sonic-2",
         badge="private LLM",
+        quality="best",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -213,6 +226,7 @@ PRESETS: list[Combo] = [
         llm="nvidia-meta/llama-3.3-70b-instruct",
         tts="elevenlabs-eleven_turbo_v2_5",
         badge="paid · cloned voice",
+        quality="bestest",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
@@ -232,6 +246,7 @@ PRESETS: list[Combo] = [
         llm="ollama-qwen2.5:0.5b-instruct",
         tts="piper-en_US-lessac-medium",
         badge="offline",
+        quality="average",
     ),
 ]
 
