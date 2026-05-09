@@ -118,20 +118,6 @@ PRESETS: list[Combo] = [
         tts="deepgram-aura-2-asteria-en",
         badge="cheapest",
     ),
-    Combo(
-        key="aws-mumbai-full",
-        label="🇮🇳 All-AWS Mumbai · Nova Lite + Polly Kajal",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: Amazon Nova Lite (Bedrock ap-south-1)  →  "
-            "TTS: Amazon Polly Kajal (Indian female, Mumbai). "
-            "LLM↔TTS stays within AWS Mumbai — needs Polly IAM permission."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-apac.amazon.nova-lite-v1:0",
-        tts="polly-Kajal-generative",
-        badge="all-AWS",
-    ),
 
     # ═════════════════════════════════════════════════════════════════
     # 🌐 Groq — fastest LLM in the world (~150ms) BUT blocked from
@@ -259,16 +245,6 @@ TTS_OPTIONS = [
      "group": "Cloud — Deepgram Aura"},
     {"key": "deepgram-aura-2-orion-en",   "label": "Aura-2 Orion  (US male)",
      "group": "Cloud — Deepgram Aura"},
-    {"key": "polly-Kajal-generative",     "label": "Polly · Kajal generative  (Indian female, en-IN)",
-     "group": "Cloud — Amazon Polly (Mumbai, needs IAM perm)"},
-    {"key": "polly-Kajal-neural",         "label": "Polly · Kajal neural  (Indian female, faster)",
-     "group": "Cloud — Amazon Polly (Mumbai, needs IAM perm)"},
-    {"key": "polly-Aditi-standard",       "label": "Polly · Aditi  (Indian bilingual en-IN/hi-IN)",
-     "group": "Cloud — Amazon Polly (Mumbai, needs IAM perm)"},
-    {"key": "polly-Ruth-generative",      "label": "Polly · Ruth generative  (US female, premium)",
-     "group": "Cloud — Amazon Polly (Mumbai, needs IAM perm)"},
-    {"key": "polly-Joanna-generative",    "label": "Polly · Joanna generative  (US female)",
-     "group": "Cloud — Amazon Polly (Mumbai, needs IAM perm)"},
     {"key": "elevenlabs-eleven_turbo_v2_5",   "label": "Turbo v2.5  (paid plan)",
      "group": "Cloud — ElevenLabs"},
     {"key": "elevenlabs-eleven_flash_v2_5",   "label": "Flash v2.5  (paid plan)",
