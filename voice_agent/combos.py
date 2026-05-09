@@ -1,15 +1,19 @@
 """
 Preset stack combos for the precall config page.
 
-Each combo is a complete voice-agent pipeline:
-    STT (speech → text) → LLM (text → text) → TTS (text → speech)
+Combos are grouped by LLM provider so each provider's combos can be
+tested in isolation. Only providers and models with proven low-latency
+on this network are included — anything that benchmarked above 1000ms
+first-token has been removed.
 
-The descriptions explicitly call out each stage's provider, model, and
-its measured first-token / first-byte latency from this network so you
-can pick the right trade-off for any given call.
+Pipeline format for every combo:
+    STT (speech → text)  →  LLM (text → text)  →  TTS (text → speech)
 
-Live numbers come from voice_agent/bench_llms.py and bench_now.py runs
-against this AWS account from an Indian residential ISP.
+Live numbers (avg first-token from Indian residential ISP):
+  NVIDIA NIM US H100         ~388ms — fastest
+  AWS Bedrock Mumbai (apac.) ~812ms — geographically closest
+  Groq US                    blocked (Cloudflare ASN) — works on EC2
+  Local Ollama / offline     varies with hardware
 """
 from __future__ import annotations
 
@@ -24,20 +28,21 @@ class Combo:
     stt: str          # plugin key for STT
     llm: str          # plugin key for LLM
     tts: str          # plugin key for TTS
-    badge: str = ""   # optional pill ("default", "fastest", ...)
+    badge: str = ""   # optional pill ("default", "cheapest", ...)
 
 
 # Default = first entry. Picked when no combo/stt/llm/tts is specified.
 PRESETS: list[Combo] = [
-    # ─── 🚀 FASTEST (live-benchmarked from India) ─────────────────────
+    # ═════════════════════════════════════════════════════════════════
+    # 🚀 NVIDIA NIM — H100-hosted, fastest from this network (~388ms)
+    # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="fast-nvidia-70b",
-        label="🚀 NVIDIA NIM · Llama 3.3 70B",
+        key="nvidia-llama-70b",
+        label="🚀 NVIDIA · Llama 3.3 70B",
         description=(
-            "STT: Deepgram Nova-3 (~150ms) → "
-            "LLM: NVIDIA NIM Llama 3.3 70B on H100 (~388ms) → "
-            "TTS: Deepgram Aura-2 Asteria (~150ms). "
-            "Best end-to-end latency from India."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: NVIDIA NIM Llama 3.3 70B (H100, ~388ms)  →  "
+            "TTS: Deepgram Aura-2 Asteria"
         ),
         stt="deepgram-nova-3",
         llm="nvidia-meta/llama-3.3-70b-instruct",
@@ -45,43 +50,55 @@ PRESETS: list[Combo] = [
         badge="default · fastest",
     ),
     Combo(
-        key="fast-nvidia-nemotron",
-        label="🚀 NVIDIA NIM · Nemotron 70B (NVIDIA-tuned)",
+        key="nvidia-nemotron-70b",
+        label="🚀 NVIDIA · Nemotron 70B (tuned)",
         description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: NVIDIA Llama 3.1 Nemotron 70B (NVIDIA-tuned for chat) → "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Slightly higher quality than vanilla Llama, similar latency."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: NVIDIA NIM Nemotron 70B (NVIDIA-tuned for chat)  →  "
+            "TTS: Deepgram Aura-2 Asteria"
         ),
         stt="deepgram-nova-3",
         llm="nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
         tts="deepgram-aura-2-asteria-en",
         badge="NVIDIA-tuned",
     ),
-
-    # ─── 🇮🇳 MUMBAI BEDROCK — geographically closest path ──────────────
     Combo(
-        key="mumbai-nova-lite",
+        key="nvidia-llama-8b",
+        label="🚀 NVIDIA · Llama 3.1 8B",
+        description=(
+            "STT: Deepgram Nova-3  →  "
+            "LLM: NVIDIA NIM Llama 3.1 8B  →  "
+            "TTS: Deepgram Aura-2 Asteria"
+        ),
+        stt="deepgram-nova-3",
+        llm="nvidia-meta/llama-3.1-8b-instruct",
+        tts="deepgram-aura-2-asteria-en",
+        badge="cheaper NIM",
+    ),
+
+    # ═════════════════════════════════════════════════════════════════
+    # 🇮🇳 AWS Bedrock Mumbai (ap-south-1) — geographically closest
+    # ═════════════════════════════════════════════════════════════════
+    Combo(
+        key="bedrock-nova-lite",
         label="🇮🇳 Bedrock Mumbai · Nova Lite",
         description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Amazon Nova Lite via Bedrock ap-south-1 Mumbai (~812ms) → "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Cheapest cloud LLM, hosted closest to Indian ISPs ($0.05/10k turns)."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Lite via Bedrock ap-south-1 (~812ms)  →  "
+            "TTS: Deepgram Aura-2 Asteria. $0.05/10k turns."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-lite-v1:0",
         tts="deepgram-aura-2-asteria-en",
-        badge="cheapest",
+        badge="cheap fast",
     ),
     Combo(
-        key="mumbai-nova-pro",
+        key="bedrock-nova-pro",
         label="🇮🇳 Bedrock Mumbai · Nova Pro",
         description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Amazon Nova Pro via Bedrock ap-south-1 Mumbai (~848ms) → "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Better reasoning than Lite, still Mumbai-routed."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Pro via Bedrock ap-south-1 (~848ms)  →  "
+            "TTS: Deepgram Aura-2 Asteria. Better reasoning than Lite."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-pro-v1:0",
@@ -89,119 +106,76 @@ PRESETS: list[Combo] = [
         badge="balanced",
     ),
     Combo(
-        key="mumbai-nova-micro",
-        label="🇮🇳 Bedrock Mumbai · Nova Micro (ultra-cheap)",
+        key="bedrock-nova-micro",
+        label="🇮🇳 Bedrock Mumbai · Nova Micro",
         description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Amazon Nova Micro via Bedrock ap-south-1 Mumbai (~848ms) → "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Tiny model, $0.03/10k turns — cheapest of all."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Micro via Bedrock ap-south-1 (~848ms)  →  "
+            "TTS: Deepgram Aura-2 Asteria. $0.03/10k turns — cheapest."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-micro-v1:0",
         tts="deepgram-aura-2-asteria-en",
-        badge="ultra-cheap",
+        badge="cheapest",
     ),
 
-    # ─── 🇺🇸 US BEDROCK — fallback when Mumbai or NIM unavailable ──────
+    # ═════════════════════════════════════════════════════════════════
+    # 🌐 Groq — fastest LLM in the world (~150ms) BUT blocked from
+    # Indian residential ISPs by Cloudflare ASN. Will work once the
+    # worker is deployed to AWS / any non-blocked network.
+    # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="us-llama-70b",
-        label="🇺🇸 Bedrock US · Llama 3.3 70B",
+        key="groq-llama-8b",
+        label="🌐 Groq · Llama 3.1 8B Instant  (EC2-only)",
         description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Meta Llama 3.3 70B via Bedrock us-east-1 (variable: 530-1500ms) → "
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Groq Llama 3.1 8B (~150ms — LPU silicon)  →  "
             "TTS: Deepgram Aura-2 Asteria. "
-            "Open-source Meta 70B; latency varies with India→US network."
+            "Blocked from Indian ISPs; works once deployed to a cloud VM."
         ),
         stt="deepgram-nova-3",
-        llm="bedrock-us.meta.llama3-3-70b-instruct-v1:0",
+        llm="groq-llama-3.1-8b-instant",
         tts="deepgram-aura-2-asteria-en",
-        badge="open-source",
+        badge="fastest if unblocked",
     ),
     Combo(
-        key="us-llama-8b",
-        label="🇺🇸 Bedrock US · Llama 3.1 8B",
+        key="groq-llama-70b",
+        label="🌐 Groq · Llama 3.3 70B Versatile  (EC2-only)",
         description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Meta Llama 3.1 8B via Bedrock us-east-1 (variable) → "
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Groq Llama 3.3 70B Versatile (~250ms)  →  "
             "TTS: Deepgram Aura-2 Asteria. "
-            "Cheap open-source 8B."
+            "Blocked from Indian ISPs; works once deployed to a cloud VM."
         ),
         stt="deepgram-nova-3",
-        llm="bedrock-us.meta.llama3-1-8b-instruct-v1:0",
+        llm="groq-llama-3.3-70b-versatile",
         tts="deepgram-aura-2-asteria-en",
-        badge="cheap open",
+        badge="EC2-only",
     ),
 
-    # ─── 🧠 QUALITY (Anthropic) ────────────────────────────────────────
+    # ═════════════════════════════════════════════════════════════════
+    # 📦 Local — runs on your machine, no cloud LLM calls
+    # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="quality-claude-haiku",
-        label="🧠 Bedrock US · Claude Haiku 4.5",
+        key="local-ollama",
+        label="📦 Local · Ollama Llama 3.1 8B",
         description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Anthropic Claude Haiku 4.5 via Bedrock us-east-1 (~1240ms) → "
-            "TTS: Deepgram Aura-2 Orion (male). "
-            "Smart but slow; costs ~$1.22/10k turns."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-us.anthropic.claude-haiku-4-5-20251001-v1:0",
-        tts="deepgram-aura-2-orion-en",
-        badge="quality",
-    ),
-    Combo(
-        key="quality-claude-sonnet",
-        label="🧠 Bedrock US · Claude Sonnet 4.5",
-        description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Anthropic Claude Sonnet 4.5 via Bedrock us-east-1 (~2535ms) → "
-            "TTS: Deepgram Aura-2 Orion (male). "
-            "Best reasoning; use only for high-stakes calls (~$4.14/10k turns)."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-        tts="deepgram-aura-2-orion-en",
-        badge="premium",
-    ),
-
-    # ─── 🔁 ALTERNATIVES ───────────────────────────────────────────────
-    Combo(
-        key="alt-gemini-flash",
-        label="🔁 Google · Gemini 2.5 Flash (free)",
-        description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Google Gemini 2.5 Flash via AI Studio (free quota, ~1259ms) → "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Free Google API quota; backup when AWS keys are exhausted."
-        ),
-        stt="deepgram-nova-3",
-        llm="gemini-gemini-2.5-flash",
-        tts="deepgram-aura-2-asteria-en",
-        badge="free LLM",
-    ),
-    Combo(
-        key="alt-ollama-local",
-        label="🔁 Local · Ollama Llama 3.1 8B",
-        description=(
-            "STT: Deepgram Nova-3 → "
-            "LLM: Llama 3.1 8B running locally on Ollama (no network) → "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Zero LLM cost; latency depends on local CPU/GPU."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Llama 3.1 8B running locally on Ollama  →  "
+            "TTS: Deepgram Aura-2 Asteria. Zero LLM cost, latency = your CPU."
         ),
         stt="deepgram-nova-3",
         llm="ollama-llama3.1:8b-instruct-q4_K_M",
         tts="deepgram-aura-2-asteria-en",
         badge="local LLM",
     ),
-
-    # ─── 📦 OFFLINE — fully local, no cloud at all ────────────────────
     Combo(
-        key="offline-local",
+        key="local-offline",
         label="📦 Offline · all-local stack",
         description=(
-            "STT: faster-whisper tiny on CPU → "
-            "LLM: Qwen2.5 0.5B on Ollama → "
-            "TTS: Piper en_US-lessac on CPU. "
-            "Zero cloud calls, real-time on a modern CPU."
+            "STT: faster-whisper tiny on CPU  →  "
+            "LLM: Qwen2.5 0.5B on Ollama  →  "
+            "TTS: Piper en_US-lessac on CPU. Zero cloud calls."
         ),
         stt="local-whisper-tiny",
         llm="ollama-qwen2.5:0.5b-instruct",
@@ -211,7 +185,7 @@ PRESETS: list[Combo] = [
 ]
 
 
-# ─── Catalog for manual STT/LLM/TTS overrides in the precall page ─────
+# ─── Manual override dropdowns on the precall page ────────────────────
 STT_OPTIONS = [
     {"key": "deepgram-nova-3",        "label": "Deepgram · Nova-3  (best Indian English) ★",
      "group": "Cloud — Deepgram"},
@@ -224,89 +198,60 @@ STT_OPTIONS = [
 ]
 
 LLM_OPTIONS = [
-    # NVIDIA NIM — fastest available from India
+    # NVIDIA NIM
     {"key": "nvidia-meta/llama-3.3-70b-instruct",
-                                          "label": "NVIDIA NIM · Llama 3.3 70B  · 388ms ★ default",
-     "group": "Cloud — NVIDIA NIM (US H100)"},
-    {"key": "nvidia-meta/llama-3.1-8b-instruct",
-                                          "label": "NVIDIA NIM · Llama 3.1 8B",
-     "group": "Cloud — NVIDIA NIM (US H100)"},
+                                          "label": "Llama 3.3 70B  · ~388ms ★ default",
+     "group": "🚀 NVIDIA NIM (US H100)"},
     {"key": "nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
-                                          "label": "NVIDIA NIM · Nemotron 70B  (tuned)",
-     "group": "Cloud — NVIDIA NIM (US H100)"},
+                                          "label": "Nemotron 70B (NVIDIA-tuned)",
+     "group": "🚀 NVIDIA NIM (US H100)"},
+    {"key": "nvidia-meta/llama-3.1-8b-instruct",
+                                          "label": "Llama 3.1 8B",
+     "group": "🚀 NVIDIA NIM (US H100)"},
     {"key": "nvidia-mistralai/mistral-7b-instruct-v0.3",
-                                          "label": "NVIDIA NIM · Mistral 7B v0.3",
-     "group": "Cloud — NVIDIA NIM (US H100)"},
-    {"key": "nvidia-deepseek-ai/deepseek-r1",
-                                          "label": "NVIDIA NIM · DeepSeek R1  (reasoning)",
-     "group": "Cloud — NVIDIA NIM (US H100)"},
-    # Bedrock Mumbai — closest geographic path
+                                          "label": "Mistral 7B v0.3",
+     "group": "🚀 NVIDIA NIM (US H100)"},
+    # Bedrock Mumbai
     {"key": "bedrock-apac.amazon.nova-lite-v1:0",
-                                          "label": "Bedrock Mumbai · Nova Lite  · 812ms · $0.05/10k",
-     "group": "Cloud — AWS Bedrock (ap-south-1 Mumbai)"},
+                                          "label": "Nova Lite  · ~812ms · $0.05/10k",
+     "group": "🇮🇳 Bedrock Mumbai (ap-south-1)"},
     {"key": "bedrock-apac.amazon.nova-pro-v1:0",
-                                          "label": "Bedrock Mumbai · Nova Pro  · 848ms · $0.76/10k",
-     "group": "Cloud — AWS Bedrock (ap-south-1 Mumbai)"},
+                                          "label": "Nova Pro  · ~848ms · $0.76/10k",
+     "group": "🇮🇳 Bedrock Mumbai (ap-south-1)"},
     {"key": "bedrock-apac.amazon.nova-micro-v1:0",
-                                          "label": "Bedrock Mumbai · Nova Micro  · 848ms · $0.03/10k",
-     "group": "Cloud — AWS Bedrock (ap-south-1 Mumbai)"},
-    # Bedrock US — fallback
-    {"key": "bedrock-us.meta.llama3-3-70b-instruct-v1:0",
-                                          "label": "Bedrock US · Llama 3.3 70B",
-     "group": "Cloud — AWS Bedrock (us-east-1)"},
-    {"key": "bedrock-us.meta.llama3-1-8b-instruct-v1:0",
-                                          "label": "Bedrock US · Llama 3.1 8B",
-     "group": "Cloud — AWS Bedrock (us-east-1)"},
-    {"key": "bedrock-us.anthropic.claude-haiku-4-5-20251001-v1:0",
-                                          "label": "Bedrock US · Claude Haiku 4.5  (slow + premium)",
-     "group": "Cloud — AWS Bedrock (us-east-1)"},
-    {"key": "bedrock-us.anthropic.claude-sonnet-4-5-20250929-v1:0",
-                                          "label": "Bedrock US · Claude Sonnet 4.5  (slow + premium)",
-     "group": "Cloud — AWS Bedrock (us-east-1)"},
-    # Gemini — free fallback
-    {"key": "gemini-gemini-2.5-flash",    "label": "Google · Gemini 2.5 Flash  (free, ~1259ms)",
-     "group": "Cloud — Google AI"},
-    {"key": "gemini-gemini-2.5-flash-lite", "label": "Google · Gemini 2.5 Flash Lite",
-     "group": "Cloud — Google AI"},
-    {"key": "gemini-gemini-2.5-pro",      "label": "Google · Gemini 2.5 Pro",
-     "group": "Cloud — Google AI"},
-    # OpenAI / Groq
-    {"key": "openai-gpt-4o-mini",         "label": "OpenAI · GPT-4o mini",
-     "group": "Cloud — OpenAI"},
-    {"key": "openai-gpt-4o",              "label": "OpenAI · GPT-4o",
-     "group": "Cloud — OpenAI"},
-    {"key": "groq-llama-3.1-8b-instant",  "label": "Groq · Llama 3.1 8B  (CDN-blocked from your ISP)",
-     "group": "Cloud — Groq"},
+                                          "label": "Nova Micro  · ~848ms · $0.03/10k cheapest",
+     "group": "🇮🇳 Bedrock Mumbai (ap-south-1)"},
+    # Groq (EC2-only)
+    {"key": "groq-llama-3.1-8b-instant",  "label": "Llama 3.1 8B Instant  · ~150ms (EC2-only)",
+     "group": "🌐 Groq (EC2-only — blocked from Indian ISPs)"},
+    {"key": "groq-llama-3.3-70b-versatile", "label": "Llama 3.3 70B Versatile  · ~250ms (EC2-only)",
+     "group": "🌐 Groq (EC2-only — blocked from Indian ISPs)"},
     # Local Ollama
     {"key": "ollama-llama3.1:8b-instruct-q4_K_M",
-                                          "label": "Ollama · Llama 3.1 8B  (local)",
-     "group": "Local — Ollama"},
-    {"key": "ollama-llama3.2:3b",         "label": "Ollama · Llama 3.2 3B  (fast local)",
-     "group": "Local — Ollama"},
-    {"key": "ollama-qwen2.5:0.5b-instruct", "label": "Ollama · Qwen2.5 0.5B  (tiny local)",
-     "group": "Local — Ollama"},
+                                          "label": "Llama 3.1 8B  (8GB+ RAM)",
+     "group": "📦 Local Ollama"},
+    {"key": "ollama-llama3.2:3b",         "label": "Llama 3.2 3B  (faster local)",
+     "group": "📦 Local Ollama"},
+    {"key": "ollama-qwen2.5:0.5b-instruct", "label": "Qwen2.5 0.5B  (tiny, fits anywhere)",
+     "group": "📦 Local Ollama"},
 ]
 
 TTS_OPTIONS = [
-    {"key": "deepgram-aura-2-asteria-en", "label": "Deepgram · Aura-2 Asteria  (US female) ★",
+    {"key": "deepgram-aura-2-asteria-en", "label": "Aura-2 Asteria  (US female) ★",
      "group": "Cloud — Deepgram Aura"},
-    {"key": "deepgram-aura-2-thalia-en",  "label": "Deepgram · Aura-2 Thalia  (US female warm)",
+    {"key": "deepgram-aura-2-thalia-en",  "label": "Aura-2 Thalia  (US female warm)",
      "group": "Cloud — Deepgram Aura"},
-    {"key": "deepgram-aura-2-luna-en",    "label": "Deepgram · Aura-2 Luna  (US female soft)",
+    {"key": "deepgram-aura-2-luna-en",    "label": "Aura-2 Luna  (US female soft)",
      "group": "Cloud — Deepgram Aura"},
-    {"key": "deepgram-aura-2-orion-en",   "label": "Deepgram · Aura-2 Orion  (US male)",
+    {"key": "deepgram-aura-2-orion-en",   "label": "Aura-2 Orion  (US male)",
      "group": "Cloud — Deepgram Aura"},
-    {"key": "deepgram-aura-asteria-en",   "label": "Deepgram · Aura v1 Asteria  (legacy)",
-     "group": "Cloud — Deepgram Aura"},
-    {"key": "elevenlabs-eleven_turbo_v2_5",   "label": "ElevenLabs · Turbo v2.5  (paid plan)",
+    {"key": "elevenlabs-eleven_turbo_v2_5",   "label": "Turbo v2.5  (paid plan)",
      "group": "Cloud — ElevenLabs"},
-    {"key": "elevenlabs-eleven_flash_v2_5",   "label": "ElevenLabs · Flash v2.5  (paid plan)",
+    {"key": "elevenlabs-eleven_flash_v2_5",   "label": "Flash v2.5  (paid plan)",
      "group": "Cloud — ElevenLabs"},
-    {"key": "piper-en_US-lessac-medium",  "label": "Piper · lessac  (US female, offline)",
+    {"key": "piper-en_US-lessac-medium",  "label": "Piper lessac  (US female, offline)",
      "group": "Local — Piper"},
-    {"key": "piper-en_US-ryan-high",      "label": "Piper · ryan-high  (US male, offline)",
-     "group": "Local — Piper"},
-    {"key": "piper-en_GB-alan-medium",    "label": "Piper · alan-medium  (British male, offline)",
+    {"key": "piper-en_US-ryan-high",      "label": "Piper ryan-high  (US male, offline)",
      "group": "Local — Piper"},
 ]
 
