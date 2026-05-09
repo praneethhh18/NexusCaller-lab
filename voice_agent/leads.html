@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexusCaller — Leads</title>
+  <style>
+    :root {
+      --bg: #0F172A;
+      --panel: #1E293B;
+      --panel-2: #273449;
+      --border: rgba(255,255,255,0.08);
+      --text: #F1F5F9;
+      --text-dim: #94A3B8;
+      --accent: #3B82F6;
+      --good: #10B981;
+      --neutral: #F59E0B;
+      --bad: #EF4444;
+      --pending: #6366F1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    p.sub { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
+    .toolbar {
+      display: flex; gap: 8px; align-items: center;
+      margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .btn {
+      background: var(--panel); border: 1px solid var(--border);
+      color: var(--text); padding: 8px 14px; border-radius: 8px;
+      font-size: 13px; cursor: pointer; font-weight: 500;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .btn:hover { background: var(--panel-2); border-color: rgba(255,255,255,0.18); }
+    .btn-primary { background: var(--accent); border-color: var(--accent); }
+    .btn-primary:hover { background: #2563EB; }
+    .btn-good { background: var(--good); border-color: var(--good); }
+    .btn-bad { background: var(--bad); border-color: var(--bad); }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px; margin-bottom: 16px;
+    }
+    .stat-card {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .stat-num { font-size: 22px; font-weight: 700; line-height: 1; }
+    .stat-lbl { font-size: 11px; color: var(--text-dim); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .queue-bar {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 20px;
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    }
+    .queue-state {
+      font-size: 12px; padding: 4px 10px; border-radius: 999px;
+      font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .queue-state.on { background: rgba(16,185,129,0.18); color: var(--good); }
+    .queue-state.off { background: rgba(100,116,139,0.18); color: var(--text-dim); }
+    .queue-state .pulse {
+      width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+      display: inline-block; margin-right: 6px; animation: pulse 1.4s infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .queue-meta { color: var(--text-dim); font-size: 12px; flex: 1; }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    .col {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px; min-height: 400px;
+      display: flex; flex-direction: column;
+    }
+    .col-h {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 12px; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .col-dot {
+      width: 9px; height: 9px; border-radius: 50%;
+    }
+    .col-h h2 { font-size: 14px; font-weight: 600; flex: 1; }
+    .col-count {
+      background: var(--panel-2); padding: 2px 8px;
+      border-radius: 999px; font-size: 11px; color: var(--text-dim);
+    }
+    .lead-list { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow: auto; max-height: 70vh; }
+    .lead {
+      background: var(--panel-2); border: 1px solid var(--border);
+      border-radius: 8px; padding: 10px 12px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .lead-name { font-size: 13px; font-weight: 600; }
+    .lead-phone { font-size: 11px; color: var(--text-dim); font-family: 'SF Mono', Consolas, monospace; }
+    .lead-headline { font-size: 11px; color: var(--text-dim); margin-top: 4px; line-height: 1.4; }
+    .lead-actions { display: flex; gap: 4px; margin-top: 6px; }
+    .lead-actions .btn { padding: 4px 8px; font-size: 11px; }
+
+    .pill {
+      font-size: 10px; padding: 1px 7px; border-radius: 999px;
+      text-transform: uppercase; letter-spacing: 0.4px; font-weight: 600;
+    }
+    .pill.calling { background: rgba(59,130,246,0.18); color: #93C5FD; }
+    .pill.qualified { background: rgba(16,185,129,0.18); color: #6EE7B7; }
+    .pill.follow_up_needed { background: rgba(16,185,129,0.18); color: #6EE7B7; }
+    .pill.not_interested { background: rgba(239,68,68,0.18); color: #FCA5A5; }
+    .pill.wrong_number { background: rgba(239,68,68,0.18); color: #FCA5A5; }
+    .pill.call_failed { background: rgba(239,68,68,0.18); color: #FCA5A5; }
+    .pill.voicemail { background: rgba(245,158,11,0.18); color: #FCD34D; }
+    .pill.no_answer { background: rgba(245,158,11,0.18); color: #FCD34D; }
+    .pill.unclear { background: rgba(245,158,11,0.18); color: #FCD34D; }
+
+    .modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+      display: none; align-items: center; justify-content: center;
+      z-index: 100; padding: 24px;
+    }
+    .modal.show { display: flex; }
+    .modal-box {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 12px; padding: 22px; max-width: 520px; width: 100%;
+      max-height: 80vh; overflow: auto;
+    }
+    .modal-h { font-size: 15px; font-weight: 600; margin-bottom: 14px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 11px; color: var(--text-dim); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .field input, .field textarea, .field select {
+      width: 100%; background: var(--bg); border: 1px solid var(--border);
+      color: var(--text); padding: 8px 10px; border-radius: 6px;
+      font-size: 13px; font-family: inherit;
+    }
+    .field textarea { resize: vertical; min-height: 70px; }
+    .modal-foot {
+      display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .board { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <h1>📞 Leads queue</h1>
+  <p class="sub">Bulk-add numbers, then let the agent call them one by one. Outcomes auto-bucket.</p>
+
+  <div class="toolbar">
+    <button class="btn btn-primary" onclick="openAddModal()">+ Add lead</button>
+    <button class="btn" onclick="openImportModal()">⤴ Bulk import (CSV)</button>
+    <button class="btn btn-good" id="btnStart" onclick="startQueue()">▶ Start auto-dial</button>
+    <button class="btn btn-bad" id="btnStop" onclick="stopQueue()" style="display:none;">⏸ Stop</button>
+    <button class="btn btn-ghost" onclick="reload()">↻ Refresh</button>
+    <span style="flex:1"></span>
+    <a class="btn btn-ghost" href="/precall" target="_blank">Cockpit / single call →</a>
+  </div>
+
+  <div class="queue-bar" id="queueBar">
+    <span class="queue-state off" id="queueState"><span class="pulse"></span>idle</span>
+    <span class="queue-meta" id="queueMeta">Auto-dialer is paused. Add leads, then click <b>Start auto-dial</b>.</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat-card"><div class="stat-num" id="cnt-pending">0</div><div class="stat-lbl">Pending</div></div>
+    <div class="stat-card"><div class="stat-num" id="cnt-calling">0</div><div class="stat-lbl">Calling now</div></div>
+    <div class="stat-card"><div class="stat-num" id="cnt-good" style="color:var(--good)">0</div><div class="stat-lbl">Good leads</div></div>
+    <div class="stat-card"><div class="stat-num" id="cnt-bad" style="color:var(--bad)">0</div><div class="stat-lbl">Bad / failed</div></div>
+  </div>
+
+  <div class="board">
+    <div class="col">
+      <div class="col-h"><div class="col-dot" style="background:var(--pending)"></div><h2>Pending + Calling</h2><span class="col-count" id="col-pending-count">0</span></div>
+      <div class="lead-list" id="col-pending"></div>
+    </div>
+    <div class="col">
+      <div class="col-h"><div class="col-dot" style="background:var(--good)"></div><h2>Good leads</h2><span class="col-count" id="col-good-count">0</span></div>
+      <div class="lead-list" id="col-good"></div>
+    </div>
+    <div class="col">
+      <div class="col-h"><div class="col-dot" style="background:var(--bad)"></div><h2>Bad / failed</h2><span class="col-count" id="col-bad-count">0</span></div>
+      <div class="lead-list" id="col-bad"></div>
+    </div>
+  </div>
+
+  <!-- Add lead modal -->
+  <div class="modal" id="addModal" onclick="if(event.target===this)closeModal('addModal')">
+    <div class="modal-box">
+      <div class="modal-h">Add a lead</div>
+      <div class="field"><label>Name</label><input id="add-name" placeholder="Mehta Industries"></div>
+      <div class="field"><label>Phone *</label><input id="add-phone" placeholder="+91 98765 43210"></div>
+      <div class="field"><label>Purpose / what to ask</label><input id="add-purpose" placeholder="quote for 5K flyers by Diwali"></div>
+      <div class="field"><label>Notes</label><textarea id="add-notes" rows="2"></textarea></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('addModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAdd()">Add</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk import modal -->
+  <div class="modal" id="importModal" onclick="if(event.target===this)closeModal('importModal')">
+    <div class="modal-box">
+      <div class="modal-h">Bulk import (CSV)</div>
+      <p class="sub" style="margin-bottom:12px;">Required column: <code>phone</code>. Optional: <code>name</code>, <code>purpose</code>, <code>notes</code>.</p>
+      <div class="field"><label>CSV file</label><input type="file" id="import-file" accept=".csv,.txt"></div>
+      <p class="sub" style="margin:8px 0">Or paste CSV text:</p>
+      <div class="field"><textarea id="import-text" rows="6" placeholder="phone,name,purpose&#10;+919876543210,Mehta,Diwali flyers quote&#10;+919876543211,Sharma,Catering inquiry"></textarea></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('importModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitImport()">Import</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Start queue modal -->
+  <div class="modal" id="startModal" onclick="if(event.target===this)closeModal('startModal')">
+    <div class="modal-box">
+      <div class="modal-h">Start auto-dialer</div>
+      <p class="sub" style="margin-bottom:12px;">The dialer will call pending leads one by one and bucket them by outcome.</p>
+      <div class="field"><label>Combo (preset or leave blank)</label><input id="start-combo" placeholder="e.g. groq-elevenlabs"></div>
+      <div class="field"><label>Telephony provider</label>
+        <select id="start-tel">
+          <option value="twilio">Twilio</option>
+          <option value="telnyx">Telnyx</option>
+          <option value="signalwire">SignalWire</option>
+          <option value="exotel">Exotel</option>
+        </select>
+      </div>
+      <div class="field"><label>Delay between calls (seconds)</label><input type="number" id="start-delay" value="12" min="2" max="600"></div>
+      <div class="field"><label>NexusAgent callback URL (so transcripts post back)</label><input id="start-callback" placeholder="http://localhost:8000/api/voice/callback"></div>
+      <div class="field"><label>Business name (sender context)</label><input id="start-bizname" placeholder="Mehta Print Co."></div>
+      <div class="field"><label>Business blurb</label><input id="start-bizblurb" placeholder="We do festive printing for Indian SMBs."></div>
+      <div class="modal-foot">
+        <button class="btn btn-ghost" onclick="closeModal('startModal')">Cancel</button>
+        <button class="btn btn-good" onclick="submitStart()">▶ Start</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const open = (id) => $(id).classList.add('show');
+const closeModal = (id) => $(id).classList.remove('show');
+
+function openAddModal() { open('addModal'); }
+function openImportModal() { open('importModal'); }
+function openStartModal() {
+  open('startModal');
+  // Prefill from previous queue settings if available
+  fetch('/api/leads/queue/status').then(r=>r.json()).then(s=>{
+    const st = s.settings || {};
+    if (st.combo) $('start-combo').value = st.combo;
+    if (st.telephony_provider) $('start-tel').value = st.telephony_provider;
+    if (st.delay_sec) $('start-delay').value = st.delay_sec;
+    if (st.callback_url) $('start-callback').value = st.callback_url;
+    if (st.business_name) $('start-bizname').value = st.business_name;
+    if (st.business_blurb) $('start-bizblurb').value = st.business_blurb;
+  });
+}
+
+async function submitAdd() {
+  const phone = $('add-phone').value.trim();
+  if (!phone) { alert('Phone is required'); return; }
+  const r = await fetch('/api/leads', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name: $('add-name').value.trim(),
+      phone, purpose: $('add-purpose').value.trim(),
+      notes: $('add-notes').value.trim(),
+    }),
+  });
+  if (!r.ok) { alert('Add failed: ' + await r.text()); return; }
+  $('add-name').value = ''; $('add-phone').value = '';
+  $('add-purpose').value = ''; $('add-notes').value = '';
+  closeModal('addModal');
+  reload();
+}
+
+async function submitImport() {
+  const file = $('import-file').files[0];
+  const text = $('import-text').value.trim();
+  let r;
+  if (file) {
+    const form = new FormData();
+    form.append('file', file);
+    r = await fetch('/api/leads/bulk', { method: 'POST', body: form });
+  } else if (text) {
+    // Parse client-side as a tiny JSON list to match the JSON path
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const header = lines.shift().split(',').map(h => h.trim().toLowerCase());
+    const phoneIdx = header.indexOf('phone');
+    if (phoneIdx === -1) { alert("CSV must have a 'phone' column"); return; }
+    const leads = lines.map(line => {
+      const cols = line.split(',').map(c => c.trim());
+      const obj = {};
+      header.forEach((h, i) => { obj[h] = cols[i] || ''; });
+      return obj;
+    });
+    r = await fetch('/api/leads/bulk', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ leads }),
+    });
+  } else {
+    alert('Pick a CSV file or paste CSV text.');
+    return;
+  }
+  if (!r.ok) { alert('Import failed: ' + await r.text()); return; }
+  const result = await r.json();
+  alert(`Imported ${result.added} lead(s)${result.skipped ? `, skipped ${result.skipped}` : ''}.`);
+  $('import-file').value = ''; $('import-text').value = '';
+  closeModal('importModal');
+  reload();
+}
+
+async function startQueue() { openStartModal(); }
+async function submitStart() {
+  const r = await fetch('/api/leads/queue/start', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({
+      combo: $('start-combo').value.trim(),
+      telephony_provider: $('start-tel').value,
+      delay_sec: parseInt($('start-delay').value || '12', 10),
+      callback_url: $('start-callback').value.trim(),
+      business_name: $('start-bizname').value.trim(),
+      business_blurb: $('start-bizblurb').value.trim(),
+    }),
+  });
+  if (!r.ok) { alert('Start failed: ' + await r.text()); return; }
+  closeModal('startModal');
+  reload();
+}
+async function stopQueue() {
+  await fetch('/api/leads/queue/stop', { method: 'POST' });
+  reload();
+}
+
+async function deleteLead(id) {
+  if (!confirm('Delete this lead?')) return;
+  await fetch('/api/leads/' + encodeURIComponent(id), { method: 'DELETE' });
+  reload();
+}
+async function resetLead(id) {
+  await fetch('/api/leads/' + encodeURIComponent(id) + '/reset', { method: 'POST' });
+  reload();
+}
+
+function leadCard(lead) {
+  const phone = lead.phone || '';
+  const headline = lead.headline ? `<div class="lead-headline">${escapeHtml(lead.headline)}</div>` : '';
+  const pill = lead.status === 'calling'
+    ? `<span class="pill calling">📞 Calling</span>`
+    : lead.outcome
+      ? `<span class="pill ${escapeHtml(lead.outcome)}">${escapeHtml(lead.outcome.replace(/_/g, ' '))}</span>`
+      : '';
+  const transcript = lead.call_id
+    ? `<a class="btn btn-ghost" href="/calls/${encodeURIComponent(lead.call_id)}" target="_blank">📜 Transcript</a>`
+    : '';
+  const reset = (lead.status === 'completed' || lead.status === 'failed')
+    ? `<button class="btn btn-ghost" onclick="resetLead('${lead.id}')">↺ Retry</button>`
+    : '';
+  return `
+    <div class="lead">
+      <div style="display:flex;align-items:center;gap:6px;justify-content:space-between">
+        <div class="lead-name">${escapeHtml(lead.name || '(no name)')}</div>
+        ${pill}
+      </div>
+      <div class="lead-phone">${escapeHtml(phone)}</div>
+      ${headline}
+      <div class="lead-actions">
+        ${transcript}
+        ${reset}
+        <button class="btn btn-ghost" onclick="deleteLead('${lead.id}')" style="margin-left:auto;color:var(--bad)">✕</button>
+      </div>
+    </div>`;
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+async function reload() {
+  // Stats + queue state
+  const [stats, qstate] = await Promise.all([
+    fetch('/api/leads/stats').then(r=>r.json()),
+    fetch('/api/leads/queue/status').then(r=>r.json()),
+  ]);
+  $('cnt-pending').textContent = (stats.pending || 0) + (stats.calling || 0);
+  $('cnt-calling').textContent = stats.calling || 0;
+  $('cnt-good').textContent = stats.good || 0;
+  $('cnt-bad').textContent = stats.bad || 0;
+
+  const running = qstate.running;
+  $('queueState').className = 'queue-state ' + (running ? 'on' : 'off');
+  $('queueState').innerHTML = `<span class="pulse"></span>${running ? 'running' : 'idle'}`;
+  if (running) {
+    const next = qstate.next ? `Next up: <b>${escapeHtml(qstate.next.name || qstate.next.phone)}</b>` : 'Queue empty.';
+    $('queueMeta').innerHTML = `Auto-dialer running. ${next}`;
+    $('btnStart').style.display = 'none';
+    $('btnStop').style.display = 'inline-flex';
+  } else {
+    $('queueMeta').textContent = 'Auto-dialer is paused. Add leads, then click Start auto-dial.';
+    $('btnStart').style.display = 'inline-flex';
+    $('btnStop').style.display = 'none';
+  }
+
+  // Lead lists
+  const all = await fetch('/api/leads').then(r=>r.json());
+  const leads = all.leads || [];
+  const pending = leads.filter(l => l.status === 'pending' || l.status === 'calling');
+  const good = leads.filter(l => l.bucket === 'good');
+  const bad = leads.filter(l => l.bucket === 'bad' || l.status === 'failed');
+  const neutral = leads.filter(l => l.bucket === 'neutral');
+
+  $('col-pending').innerHTML = pending.map(leadCard).join('') || '<div style="color:var(--text-dim);font-size:12px;padding:8px">No pending leads. Add one above.</div>';
+  // Neutral leads (voicemail / no answer / unclear) live with the Good column
+  // since they're typically retry-worthy, not actually bad.
+  $('col-good').innerHTML = (good.concat(neutral)).map(leadCard).join('') || '<div style="color:var(--text-dim);font-size:12px;padding:8px">Nothing yet.</div>';
+  $('col-bad').innerHTML = bad.map(leadCard).join('') || '<div style="color:var(--text-dim);font-size:12px;padding:8px">Nothing yet.</div>';
+
+  $('col-pending-count').textContent = pending.length;
+  $('col-good-count').textContent = good.length + neutral.length;
+  $('col-bad-count').textContent = bad.length;
+}
+
+reload();
+setInterval(reload, 5000);  // refresh every 5s while page is open
+</script>
+</body>
+</html>

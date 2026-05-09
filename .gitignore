@@ -33,6 +33,10 @@ Thumbs.db
 # Per-call transcripts (operator-private)
 voice_agent/transcripts/
 
+# Local lead-queue SQLite (operator-private state, not the system of record)
+voice_agent/leads.db
+voice_agent/leads.db-*
+
 # Auto-generated
 node_modules/
 dist/

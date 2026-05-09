@@ -54,6 +54,12 @@ ROOT = Path(__file__).parent
 TRANSCRIPT_DIR = ROOT / "transcripts"
 TRANSCRIPT_DIR.mkdir(exist_ok=True)
 
+# Lead-queue + auto-dialer feature. Mount the router and spawn the
+# background dialer task on app startup. See voice_agent/leads_router.py.
+from voice_agent.leads_router import router as _leads_router, install_autodialer
+app.include_router(_leads_router)
+install_autodialer(app)
+
 
 def _require(name: str) -> str:
     val = os.getenv(name)
