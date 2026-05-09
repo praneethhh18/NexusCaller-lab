@@ -14,7 +14,6 @@ Run:
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 import time
@@ -34,13 +33,15 @@ PRICES_PER_MTOK = {
     "us.amazon.nova-micro-v1:0":          (0.035, 0.14),
     "us.amazon.nova-lite-v1:0":           (0.06,  0.24),
     "us.amazon.nova-pro-v1:0":            (0.80,  3.20),
-    "us.meta.llama3-2-3b-instruct-v1:0":  (0.15,  0.15),
     "us.meta.llama3-1-8b-instruct-v1:0":  (0.22,  0.22),
     "us.meta.llama3-3-70b-instruct-v1:0": (0.72,  0.72),
-    "mistral.mistral-7b-instruct-v0:2":   (0.15,  0.20),
-    "mistral.mixtral-8x7b-instruct-v0:1": (0.45,  0.70),
     "us.anthropic.claude-haiku-4-5-20251001-v1:0":  (0.80,  4.00),
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0": (3.00, 15.00),
+    "ai21.jamba-1-5-mini-v1:0":           (0.20,  0.40),
+    "ai21.jamba-1-5-large-v1:0":          (2.00,  8.00),
+    # additional candidates to evaluate
+    "cohere.command-r-v1:0":              (0.50,  1.50),
+    "cohere.command-r-plus-v1:0":         (3.00, 15.00),
 }
 
 MODELS = list(PRICES_PER_MTOK.keys())
@@ -142,22 +143,41 @@ def main():
         sys.exit(1)
 
     client = _build_client()
-    print(f"\nBenchmarking {len(MODELS)} models for voice-agent fitness…")
+    print("\nWarm benchmark: 1 warm-up + 3 measured runs averaged.")
     print(f"Region: {os.getenv('AWS_REGION', 'us-east-1')}")
-    print(f"User turn: {USER_TURN!r}")
-    print(f"Expected reply: ~10-15 words\n")
-    print(f"{'model':<55} {'first':<8} {'total':<8} {'tok/s':<7} {'$/turn':<10} {'reply'}")
-    print(f"{'-' * 55} {'-' * 7:<8} {'-' * 7:<8} {'-' * 6:<7} {'-' * 9:<10} {'-' * 30}")
+    print(f"User turn: {USER_TURN!r}\n")
+    print(f"{'model':<55} {'avg first':<11} {'best':<8} {'$/10k':<10}")
+    print(f"{'-' * 55} {'-' * 10:<11} {'-' * 7:<8} {'-' * 9}")
 
     results: list[Result] = []
     for model in MODELS:
-        r = benchmark(client, model)
-        results.append(r)
-        if r.ok:
-            print(f"{model:<55} {r.first_token_ms:>5}ms  {r.total_ms:>5}ms  {r.tps:>5.1f}  "
-                  f"${r.cost_usd*1000:>6.4f}/k  {r.reply[:50]!r}")
-        else:
-            print(f"{model:<55} FAIL: {r.error}")
+        # 1 warm-up call (don't count cold-start)
+        warm = benchmark(client, model)
+        if not warm.ok:
+            print(f"{model:<55} FAIL: {warm.error[:80]}")
+            results.append(warm)
+            continue
+
+        # 3 measured runs
+        runs = [benchmark(client, model) for _ in range(3)]
+        runs = [r for r in runs if r.ok]
+        if not runs:
+            print(f"{model:<55} FAIL on warm runs")
+            continue
+        avg_first = sum(r.first_token_ms for r in runs) // len(runs)
+        best_first = min(r.first_token_ms for r in runs)
+        avg_in = sum(r.in_tokens for r in runs) / len(runs)
+        avg_out = sum(r.out_tokens for r in runs) / len(runs)
+        # synthetic "result" for the leaderboard
+        agg = Result(
+            model=model, ok=True,
+            first_token_ms=avg_first,
+            total_ms=sum(r.total_ms for r in runs) // len(runs),
+            in_tokens=int(avg_in), out_tokens=int(avg_out),
+            reply=runs[0].reply,
+        )
+        results.append(agg)
+        print(f"{model:<55} {avg_first:>5}ms     {best_first:>5}ms   ${agg.cost_usd*10000:>7.2f}")
 
     print(f"\n{'-' * 100}\nLEADERBOARD (sorted by first-token latency)")
     ok_results = sorted([r for r in results if r.ok], key=lambda x: x.first_token_ms or 99999)

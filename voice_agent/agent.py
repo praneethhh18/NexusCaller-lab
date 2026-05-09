@@ -316,7 +316,7 @@ def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
         return primary  # no fallback configured — return as-is
 
     logger.info(
-        f"[fallback-llm] chain: " +
+        "[fallback-llm] chain: " +
         " → ".join(f"{p.provider}/{p.model}" for p in chain)
     )
     return _FallbackLLM(chain)

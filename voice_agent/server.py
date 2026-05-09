@@ -44,6 +44,10 @@ from loguru import logger
 from voice_agent.combos import (
     LLM_OPTIONS, PRESETS, STT_OPTIONS, TTS_OPTIONS, default_combo, find_combo,
 )
+# Lead-queue + auto-dialer feature. The router exposes /leads + the lead REST
+# API; install_autodialer wires the background asyncio task to FastAPI's
+# startup/shutdown hooks.
+from voice_agent.leads_router import router as _leads_router, install_autodialer
 
 
 load_dotenv()
@@ -54,9 +58,6 @@ ROOT = Path(__file__).parent
 TRANSCRIPT_DIR = ROOT / "transcripts"
 TRANSCRIPT_DIR.mkdir(exist_ok=True)
 
-# Lead-queue + auto-dialer feature. Mount the router and spawn the
-# background dialer task on app startup. See voice_agent/leads_router.py.
-from voice_agent.leads_router import router as _leads_router, install_autodialer
 app.include_router(_leads_router)
 install_autodialer(app)
 

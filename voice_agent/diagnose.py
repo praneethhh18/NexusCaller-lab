@@ -107,7 +107,8 @@ def main():
     print("\n[2] Plugin imports")
     try:
         from livekit.agents import WorkerOptions
-        from livekit.plugins import cartesia, deepgram, elevenlabs, openai, silero
+        # Probe each plugin loads — diagnostic only, not used here.
+        from livekit.plugins import cartesia, deepgram, elevenlabs, openai, silero  # noqa: F401
         print(f"  {PASS}  livekit-agents + all plugins")
     except ImportError as e:
         print(f"  {FAIL}  {e}")

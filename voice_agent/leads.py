@@ -28,8 +28,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from loguru import logger
-
 
 _DB_PATH = Path(__file__).parent / "leads.db"
 
