@@ -33,246 +33,179 @@ class Combo:
 
 # Default = first entry. Picked when no combo/stt/llm/tts is specified.
 #
-# Test-matrix combo set — organised so each tier holds two layers constant
-# and varies the third. This lets the operator A/B compare any one layer
-# (STT, LLM, or TTS) without confounding variables. Tiers:
+# 10 full-pipeline combos. Each one is a complete STT × LLM × TTS stack
+# you can dial test as a unit. No two combos use the same triplet —
+# every pipeline tells a coherent design story (premium / India / speed /
+# budget / privacy / etc).
 #
-#   TIER 1 — production winners (3)         pick by use case
-#   TIER 2 — LLM A/B tests (8)              same STT + TTS, swap LLM
-#   TIER 3 — TTS A/B tests (4)              same STT + LLM, swap TTS
-#   TIER 4 — STT A/B tests (1)              same LLM + TTS, swap STT
-#   TIER 5 — Specialty (2)                  voice cloning · offline
+# Mix coverage across providers:
+#   STT  : Deepgram Nova-3 / Nova-2,  Groq Whisper Large-v3,  Local Whisper tiny / base
+#   LLM  : NVIDIA H100 (Llama 70B, Nemotron, 8B),  Bedrock Mumbai
+#          (Nova Pro / Lite / Micro),  Groq LPU (Llama 70B), Local Ollama
+#   TTS  : Cartesia Sonic-2 / Sonic-English,  Deepgram Aura-2,
+#          ElevenLabs Turbo / Flash,  Piper offline
 #
-# Why STT + TTS are held constant in LLM tests:
-#   Deepgram Nova-3 (STT) + Cartesia Sonic-2 (TTS) are each best-in-class
-#   at <200ms first-byte. The LLM is the layer with the biggest quality
-#   variance — that's what most A/B tests should isolate.
+# This way you can A/B any pipeline by combo without juggling dropdowns.
 PRESETS: list[Combo] = [
     # ═══════════════════════════════════════════════════════════════════
-    # 🏆 TIER 1 — PRODUCTION WINNERS — pick by use case
+    # 🏆 PREMIUM ALL-CLOUD (DEFAULT) — best of each layer
     # ═══════════════════════════════════════════════════════════════════
     Combo(
-        key="best-default",
-        label="🏆 Best default (Llama 70B + Cartesia)",
+        key="premium-allcloud",
+        label="🏆 Premium all-cloud (default)",
         description=(
-            "STT: Deepgram Nova-3  →  LLM: NVIDIA Llama 3.3 70B (~388ms)  →  "
-            "TTS: Cartesia Sonic-2 (expressive). The proven all-rounder."
+            "STT: Deepgram Nova-3 (best Indian English)  →  "
+            "LLM: NVIDIA Llama 3.3 70B (H100, ~388ms)  →  "
+            "TTS: Cartesia Sonic-2 (expressive, <100ms streaming). "
+            "Highest quality at every layer. The production default."
         ),
         stt="deepgram-nova-3",
         llm="nvidia-meta/llama-3.3-70b-instruct",
         tts="cartesia-sonic-2",
-        badge="default",
+        badge="default · premium",
     ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 🇮🇳 ALL-INDIA ROUTED — Mumbai region for the LLM hop
+    # ═══════════════════════════════════════════════════════════════════
     Combo(
-        key="best-india",
-        label="🇮🇳 Best for India (Bedrock Mumbai)",
+        key="india-routed",
+        label="🇮🇳 India-routed (Bedrock Mumbai + Cartesia)",
         description=(
-            "STT: Deepgram Nova-3  →  LLM: Amazon Nova Pro via Bedrock ap-south-1  →  "
-            "TTS: Cartesia Sonic-2. Geo-routed for Indian callers."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Pro via Bedrock ap-south-1 (~848ms, India region)  →  "
+            "TTS: Cartesia Sonic-2. Geographic optimisation for Indian callers."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-pro-v1:0",
         tts="cartesia-sonic-2",
         badge="India region",
     ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # ⚡ ALL-GROQ SPEED — fastest end-to-end pipeline (EC2-only)
+    # Groq Whisper STT + Groq Llama LLM + ElevenLabs Flash TTS
+    # ═══════════════════════════════════════════════════════════════════
     Combo(
-        key="best-budget",
-        label="💰 Best budget (Nova Micro · cheapest LLM)",
+        key="speed-allgroq",
+        label="⚡ Speed all-Groq (EC2-only · sub-500ms total)",
         description=(
-            "STT: Deepgram Nova-3  →  LLM: Amazon Nova Micro Mumbai ($0.03/10k turns)  →  "
-            "TTS: Cartesia Sonic-2. Cheapest LLM, still emotional voice."
+            "STT: Groq Whisper Large-v3 (~150ms)  →  "
+            "LLM: Groq Llama 3.3 70B Versatile (~250ms LPU silicon)  →  "
+            "TTS: ElevenLabs Flash v2.5 (fastest premium TTS). "
+            "Fastest end-to-end. Blocked from Indian residential ISPs — "
+            "works once deployed to a cloud VM."
         ),
-        stt="deepgram-nova-3",
+        stt="groq-whisper-large-v3",
+        llm="groq-llama-3.3-70b-versatile",
+        tts="elevenlabs-eleven_flash_v2_5",
+        badge="EC2-only · fastest",
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 💰 BUDGET PIPELINE — cheapest cloud combo possible
+    # Older Deepgram + cheapest Bedrock LLM + Deepgram Aura
+    # ═══════════════════════════════════════════════════════════════════
+    Combo(
+        key="budget-cloud",
+        label="💰 Budget pipeline (cheapest cloud)",
+        description=(
+            "STT: Deepgram Nova-2 (older, cheaper)  →  "
+            "LLM: Amazon Nova Micro Mumbai ($0.03/10k turns)  →  "
+            "TTS: Deepgram Aura-2 Asteria (cheapest premium TTS). "
+            "Cheapest viable cloud combo per call."
+        ),
+        stt="deepgram-nova-2",
         llm="bedrock-apac.amazon.nova-micro-v1:0",
-        tts="cartesia-sonic-2",
+        tts="deepgram-aura-2-asteria-en",
         badge="cheapest",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
-    # 🧠 TIER 2 — LLM A/B TESTS — same STT + TTS, swap LLM
-    # All hold: STT = Deepgram Nova-3, TTS = Cartesia Sonic-2
+    # 🧠 SMART B2B — best reasoning LLM + premium voice
+    # Nemotron is NVIDIA's chat-tuned 70B — better at multi-turn reasoning
     # ═══════════════════════════════════════════════════════════════════
     Combo(
-        key="llm-nvidia-nemotron",
-        label="🧠 LLM test · NVIDIA Nemotron 70B (chat-tuned)",
+        key="smart-b2b",
+        label="🧠 Smart B2B (Nemotron + ElevenLabs Turbo)",
         description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: NVIDIA NIM Nemotron 70B — NVIDIA-tuned for conversational reasoning."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: NVIDIA Nemotron 70B (NVIDIA-tuned for conversational reasoning)  →  "
+            "TTS: ElevenLabs Turbo v2.5 (premium voice quality). "
+            "For high-stakes B2B / enterprise calls needing multi-turn reasoning."
         ),
         stt="deepgram-nova-3",
         llm="nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
-        tts="cartesia-sonic-2",
-        badge="LLM test",
+        tts="elevenlabs-eleven_turbo_v2_5",
+        badge="smartest · paid TTS",
     ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 🎤 GROQ-STT EXPERIMENT — see if Groq's Whisper beats Deepgram
+    # ═══════════════════════════════════════════════════════════════════
     Combo(
-        key="llm-nvidia-llama8b",
-        label="🧠 LLM test · NVIDIA Llama 3.1 8B (cheap NIM)",
+        key="groq-stt-mix",
+        label="🎤 Groq STT + NVIDIA + Cartesia (EC2-only)",
         description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: NVIDIA NIM Llama 3.1 8B — same H100 infra as 70B but smaller / cheaper."
+            "STT: Groq Whisper Large-v3 (~150ms LPU silicon)  →  "
+            "LLM: NVIDIA Llama 3.3 70B  →  "
+            "TTS: Cartesia Sonic-2. "
+            "Tests whether Groq's Whisper STT outperforms Deepgram on US/cloud calls. "
+            "EC2-only."
         ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.1-8b-instruct",
+        stt="groq-whisper-large-v3",
+        llm="nvidia-meta/llama-3.3-70b-instruct",
         tts="cartesia-sonic-2",
-        badge="LLM test",
+        badge="EC2-only · STT test",
     ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 🇮🇳 INDIA + AURA — pure-Mumbai LLM with cheaper TTS option
+    # ═══════════════════════════════════════════════════════════════════
     Combo(
-        key="llm-bedrock-novalite",
-        label="🧠 LLM test · Bedrock Nova Lite (Mumbai)",
+        key="india-cheap-aura",
+        label="🇮🇳 India cheap + Aura (Nova Lite + Aura Thalia)",
         description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: Amazon Nova Lite via Bedrock ap-south-1 — $0.05/10k turns."
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Lite via Bedrock ap-south-1 ($0.05/10k turns)  →  "
+            "TTS: Deepgram Aura-2 Thalia (warm female voice). "
+            "Sweet spot for India ops — cheap LLM, decent voice, all geo-routed."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-lite-v1:0",
-        tts="cartesia-sonic-2",
-        badge="LLM test",
-    ),
-    Combo(
-        key="llm-groq-llama70b",
-        label="🧠 LLM test · Groq Llama 3.3 70B (~250ms · EC2-only)",
-        description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: Groq Llama 3.3 70B Versatile — fastest LPU silicon. "
-            "Blocked from Indian residential ISPs; works once deployed to a cloud VM."
-        ),
-        stt="deepgram-nova-3",
-        llm="groq-llama-3.3-70b-versatile",
-        tts="cartesia-sonic-2",
-        badge="LLM test · EC2",
-    ),
-    Combo(
-        key="llm-groq-llama8b",
-        label="🧠 LLM test · Groq Llama 3.1 8B (~150ms · EC2-only)",
-        description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: Groq Llama 3.1 8B Instant — even faster than 70B. "
-            "Blocked from Indian residential ISPs."
-        ),
-        stt="deepgram-nova-3",
-        llm="groq-llama-3.1-8b-instant",
-        tts="cartesia-sonic-2",
-        badge="LLM test · EC2",
-    ),
-    Combo(
-        key="llm-ollama-llama8b",
-        label="🧠 LLM test · Local Ollama Llama 3.1 8B",
-        description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: Llama 3.1 8B running on local Ollama — no cloud reasoning, "
-            "good for sensitive prompts."
-        ),
-        stt="deepgram-nova-3",
-        llm="ollama-llama3.1:8b-instruct-q4_K_M",
-        tts="cartesia-sonic-2",
-        badge="LLM test · local",
-    ),
-    Combo(
-        key="llm-ollama-llama3b",
-        label="🧠 LLM test · Local Ollama Llama 3.2 3B",
-        description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: Llama 3.2 3B on Ollama — smaller, faster on CPU than 8B."
-        ),
-        stt="deepgram-nova-3",
-        llm="ollama-llama3.2:3b",
-        tts="cartesia-sonic-2",
-        badge="LLM test · local",
-    ),
-    Combo(
-        key="llm-bedrock-novamicro",
-        label="🧠 LLM test · Bedrock Nova Micro (cheapest)",
-        description=(
-            "Holding STT = Deepgram, TTS = Cartesia. "
-            "LLM: Amazon Nova Micro via Bedrock ap-south-1 — $0.03/10k turns, cheapest."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-apac.amazon.nova-micro-v1:0",
-        tts="cartesia-sonic-2",
-        badge="LLM test",
+        tts="deepgram-aura-2-thalia-en",
+        badge="balanced India",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
-    # 🔊 TIER 3 — TTS A/B TESTS — same STT + LLM, swap TTS
-    # All hold: STT = Deepgram Nova-3, LLM = NVIDIA Llama 3.3 70B
+    # 🔒 PRIVACY HYBRID — local STT + local LLM + cloud TTS
+    # Audio reasoning never leaves the machine; only synthesis is cloud.
     # ═══════════════════════════════════════════════════════════════════
     Combo(
-        key="tts-cartesia-english",
-        label="🔊 TTS test · Cartesia Sonic English (older)",
+        key="privacy-hybrid",
+        label="🔒 Privacy hybrid (local STT + LLM, cloud TTS)",
         description=(
-            "Holding STT = Deepgram, LLM = NVIDIA Llama 70B. "
-            "TTS: Cartesia Sonic English — older Sonic model, also fast/expressive."
-        ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
-        tts="cartesia-sonic-english",
-        badge="TTS test",
-    ),
-    Combo(
-        key="tts-aura-asteria",
-        label="🔊 TTS test · Deepgram Aura Asteria (US female)",
-        description=(
-            "Holding STT = Deepgram, LLM = NVIDIA Llama 70B. "
-            "TTS: Deepgram Aura-2 Asteria — fast US female voice, flatter than Cartesia."
-        ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
-        tts="deepgram-aura-2-asteria-en",
-        badge="TTS test",
-    ),
-    Combo(
-        key="tts-aura-orion",
-        label="🔊 TTS test · Deepgram Aura Orion (US male)",
-        description=(
-            "Holding STT = Deepgram, LLM = NVIDIA Llama 70B. "
-            "TTS: Deepgram Aura-2 Orion — male voice option."
-        ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
-        tts="deepgram-aura-2-orion-en",
-        badge="TTS test",
-    ),
-    Combo(
-        key="tts-elevenlabs-turbo",
-        label="🔊 TTS test · ElevenLabs Turbo v2.5 (paid)",
-        description=(
-            "Holding STT = Deepgram, LLM = NVIDIA Llama 70B. "
-            "TTS: ElevenLabs Turbo v2.5 — premium quality, supports voice cloning. "
-            "Requires paid ElevenLabs plan."
-        ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
-        tts="elevenlabs-eleven_turbo_v2_5",
-        badge="TTS test · paid",
-    ),
-
-    # ═══════════════════════════════════════════════════════════════════
-    # 🎤 TIER 4 — STT A/B TEST — same LLM + TTS, swap STT
-    # All hold: LLM = NVIDIA Llama 3.3 70B, TTS = Cartesia Sonic-2
-    # ═══════════════════════════════════════════════════════════════════
-    Combo(
-        key="stt-whisper-base",
-        label="🎤 STT test · Local Whisper base (offline STT)",
-        description=(
-            "Holding LLM = NVIDIA Llama 70B, TTS = Cartesia. "
-            "STT: faster-whisper base on CPU — no cloud STT, ~500ms on modern CPU. "
-            "Tradeoff: slower than Deepgram, but audio never leaves your machine."
+            "STT: faster-whisper base on CPU  →  "
+            "LLM: Llama 3.1 8B on local Ollama  →  "
+            "TTS: Cartesia Sonic-2 (cloud — only voice synthesis is remote). "
+            "Sensitive prompts never reach a cloud LLM. Tradeoff: ~500-800ms STT."
         ),
         stt="local-whisper-base",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
+        llm="ollama-llama3.1:8b-instruct-q4_K_M",
         tts="cartesia-sonic-2",
-        badge="STT test · local",
+        badge="private LLM",
     ),
 
     # ═══════════════════════════════════════════════════════════════════
-    # 🎯 TIER 5 — SPECIALTY
+    # 💎 VOICE-CLONING PREMIUM — your own voice via ElevenLabs
     # ═══════════════════════════════════════════════════════════════════
     Combo(
         key="voice-cloning",
         label="💎 Voice cloning (your voice via ElevenLabs)",
         description=(
-            "STT: Deepgram Nova-3  →  LLM: NVIDIA Llama 3.3 70B  →  "
-            "TTS: ElevenLabs Turbo v2.5 with cloned voice. "
+            "STT: Deepgram Nova-3  →  "
+            "LLM: NVIDIA Llama 3.3 70B  →  "
+            "TTS: ElevenLabs Turbo v2.5 with your cloned voice. "
             "Requires paid ElevenLabs Starter ($5/mo). "
             "Set ELEVENLABS_VOICE_ID in .env to your cloned voice ID."
         ),
@@ -281,12 +214,19 @@ PRESETS: list[Combo] = [
         tts="elevenlabs-eleven_turbo_v2_5",
         badge="paid · cloned voice",
     ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 📦 PURE OFFLINE — air-gapped, zero cloud dependencies
+    # ═══════════════════════════════════════════════════════════════════
     Combo(
         key="offline-airgapped",
-        label="📦 Offline / air-gapped (zero cloud)",
+        label="📦 Pure offline (zero cloud)",
         description=(
-            "STT: faster-whisper tiny  →  LLM: Qwen2.5 0.5B on Ollama  →  "
-            "TTS: Piper en_US-lessac. Quality is intentionally the no-cloud floor."
+            "STT: faster-whisper tiny on CPU  →  "
+            "LLM: Qwen2.5 0.5B on Ollama  →  "
+            "TTS: Piper en_US-lessac on CPU. "
+            "Zero cloud calls — for air-gapped demos / unreliable internet. "
+            "Quality is intentionally the no-cloud floor."
         ),
         stt="local-whisper-tiny",
         llm="ollama-qwen2.5:0.5b-instruct",
@@ -300,8 +240,10 @@ PRESETS: list[Combo] = [
 STT_OPTIONS = [
     {"key": "deepgram-nova-3",        "label": "Deepgram · Nova-3  (best Indian English) ★",
      "group": "Cloud — Deepgram"},
-    {"key": "deepgram-nova-2",        "label": "Deepgram · Nova-2",
+    {"key": "deepgram-nova-2",        "label": "Deepgram · Nova-2  (older, cheaper)",
      "group": "Cloud — Deepgram"},
+    {"key": "groq-whisper-large-v3",  "label": "Groq · Whisper Large-v3  (~150ms · EC2-only)",
+     "group": "Cloud — Groq"},
     {"key": "local-whisper-tiny",     "label": "Local · Whisper tiny  (CPU, offline)",
      "group": "Local — Whisper"},
     {"key": "local-whisper-base",     "label": "Local · Whisper base  (slower, more accurate)",
