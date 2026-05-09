@@ -39,6 +39,7 @@ from loguru import logger
 from voice_agent.combos import default_combo, find_combo
 from voice_agent.storage import transcript_path, summary_path
 from voice_agent.summary import summarise_transcript
+from voice_agent.tools import build_tools
 
 
 load_dotenv()
@@ -384,9 +385,14 @@ def _system_prompt(meta: dict) -> str:
         f"Goal: qualify interest, propose a next step.\n"
         f"Rules: ONE short sentence per reply, 12 words max. "
         f"Then STOP and listen. Speak naturally, never say 'AI' or 'agent' or read rules. "
-        f"If you don't know a fact, say you'll follow up by email. "
         f"If they're busy: 'No problem, have a great day.' "
-        f"This is a phone call — no markdown, no URLs."
+        f"This is a phone call — no markdown, no URLs.\n"
+        f"TOOLS you can use silently:\n"
+        f"- lookup_business_info(query): use BEFORE making any factual claim about "
+        f"  {business_name} (pricing, products, hours). Don't invent facts.\n"
+        f"- schedule_callback(when_iso, reason): when caller asks to be called back.\n"
+        f"- send_email_followup(subject, body): when caller asks for info via email.\n"
+        f"- end_call(reason): only AFTER you said goodbye out loud."
     )
 
 
@@ -599,7 +605,15 @@ async def entrypoint(ctx: JobContext):
         )
     )
 
-    agent = Agent(instructions=_system_prompt(meta))
+    # Build function-calling tools bound to this call's metadata. The
+    # LLM can invoke these mid-conversation to look up KB info, schedule
+    # callbacks, queue emails, or end the call.
+    tools = build_tools(
+        business_id=meta.get("business_id", ""),
+        contact_id=meta.get("contact_id", ""),
+        call_sid=call_id,
+    )
+    agent = Agent(instructions=_system_prompt(meta), tools=tools)
     await session.start(agent=agent, room=ctx.room)
 
     # Greet AFTER the SIP participant actually joins the room AND the audio
