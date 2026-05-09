@@ -322,6 +322,25 @@ def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
 
 
 def _build_tts(key: str):
+    if key.startswith("polly-"):
+        # Amazon Polly TTS — fully integrated with Bedrock so LLM→TTS
+        # round-trip stays within AWS Mumbai. Requires the IAM user to
+        # have polly:SynthesizeSpeech permission (separate from Bedrock).
+        # Voice key format: "polly-<voice>-<engine>", e.g. "polly-Kajal-generative".
+        # Indian voices: Kajal (en-IN female), Aditi (en-IN/hi-IN bilingual).
+        rest = key.removeprefix("polly-")
+        if "-" in rest:
+            voice, engine = rest.rsplit("-", 1)
+        else:
+            voice, engine = rest, "neural"
+        return lk_aws.TTS(
+            voice=voice,
+            speech_engine=engine,  # "generative" | "neural" | "standard" | "long-form"
+            sample_rate=16000,
+            region=os.getenv("AWS_REGION", "ap-south-1"),
+            api_key=os.getenv("AWS_ACCESS_KEY_ID"),
+            api_secret=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        )
     if key.startswith("deepgram-"):
         # Deepgram Aura TTS — streaming WebSocket mode. Streaming is
         # required for clean barge-in / interruption: when the user
