@@ -32,7 +32,46 @@ class Combo:
 
 
 # Default = first entry. Picked when no combo/stt/llm/tts is specified.
+#
+# Why Cartesia Sonic is the new default:
+#   - Deepgram Aura is fast but emotionally flat (designed for IVR)
+#   - Cartesia Sonic-2 streams in <100ms, has expressive prosody, sounds
+#     like a real human on the phone
+#   - 30K chars/mo free tier; $5/mo for 100K after
+#
+# The previous NVIDIA + Aura combos are kept below for users who want
+# pure speed at the cost of expressiveness.
 PRESETS: list[Combo] = [
+    # ═════════════════════════════════════════════════════════════════
+    # 💛 Cartesia Sonic — emotional + fast, the new default
+    # ═════════════════════════════════════════════════════════════════
+    Combo(
+        key="nvidia-llama70b-cartesia",
+        label="💛 NVIDIA + Cartesia Sonic (most human)",
+        description=(
+            "STT: Deepgram Nova-3  →  "
+            "LLM: NVIDIA NIM Llama 3.3 70B (H100, ~388ms)  →  "
+            "TTS: Cartesia Sonic-2 (expressive, <100ms streaming)"
+        ),
+        stt="deepgram-nova-3",
+        llm="nvidia-meta/llama-3.3-70b-instruct",
+        tts="cartesia-sonic-2",
+        badge="default · most human",
+    ),
+    Combo(
+        key="bedrock-novapro-cartesia",
+        label="🇮🇳 Bedrock + Cartesia (emotional, India-routed)",
+        description=(
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Pro via Bedrock ap-south-1  →  "
+            "TTS: Cartesia Sonic-2 (expressive, <100ms)"
+        ),
+        stt="deepgram-nova-3",
+        llm="bedrock-apac.amazon.nova-pro-v1:0",
+        tts="cartesia-sonic-2",
+        badge="emotional · India",
+    ),
+
     # ═════════════════════════════════════════════════════════════════
     # 🚀 NVIDIA NIM — H100-hosted, fastest from this network (~388ms)
     # ═════════════════════════════════════════════════════════════════
@@ -47,7 +86,7 @@ PRESETS: list[Combo] = [
         stt="deepgram-nova-3",
         llm="nvidia-meta/llama-3.3-70b-instruct",
         tts="deepgram-aura-2-asteria-en",
-        badge="default · fastest",
+        badge="fastest · flat voice",
     ),
     Combo(
         key="nvidia-nemotron-70b",
@@ -237,7 +276,13 @@ LLM_OPTIONS = [
 ]
 
 TTS_OPTIONS = [
-    {"key": "deepgram-aura-2-asteria-en", "label": "Aura-2 Asteria  (US female) ★",
+    # Cartesia first — emotionally expressive, our new default
+    {"key": "cartesia-sonic-2",            "label": "Sonic-2  (expressive, <100ms streaming) ★",
+     "group": "Cloud — Cartesia"},
+    {"key": "cartesia-sonic-english",      "label": "Sonic English  (older, also fast)",
+     "group": "Cloud — Cartesia"},
+
+    {"key": "deepgram-aura-2-asteria-en", "label": "Aura-2 Asteria  (US female, flat)",
      "group": "Cloud — Deepgram Aura"},
     {"key": "deepgram-aura-2-thalia-en",  "label": "Aura-2 Thalia  (US female warm)",
      "group": "Cloud — Deepgram Aura"},
