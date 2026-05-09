@@ -33,188 +33,176 @@ class Combo:
 
 # Default = first entry. Picked when no combo/stt/llm/tts is specified.
 #
-# Why Cartesia Sonic is the new default:
-#   - Deepgram Aura is fast but emotionally flat (designed for IVR)
-#   - Cartesia Sonic-2 streams in <100ms, has expressive prosody, sounds
-#     like a real human on the phone
-#   - 30K chars/mo free tier; $5/mo for 100K after
+# Curated 9-combo set, each tuned for ONE specific scenario the operator
+# might face. No two combos compete for the same niche — pick by what the
+# call is FOR, not by which provider is hot today. Underlying STT / LLM /
+# TTS plugins are still all switchable via the precall page's manual
+# dropdowns (STT_OPTIONS / LLM_OPTIONS / TTS_OPTIONS) for power users.
 #
-# The previous NVIDIA + Aura combos are kept below for users who want
-# pure speed at the cost of expressiveness.
+# Recipe rule of thumb:
+#   Live calls need <500ms first-token end-to-end. STT (Deepgram Nova-3)
+#   and TTS (Cartesia Sonic-2) are constant across cloud combos because
+#   they're each best-in-class for their layer at <200ms. The LLM is
+#   what we vary by use case.
 PRESETS: list[Combo] = [
     # ═════════════════════════════════════════════════════════════════
-    # 💛 Cartesia Sonic — emotional + fast, the new default
+    # 🏆 Production / Sales — the default. Most human-feeling on a call.
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="nvidia-llama70b-cartesia",
-        label="💛 NVIDIA + Cartesia Sonic (most human)",
+        key="production-sales",
+        label="🏆 Production sales (default · most human)",
         description=(
             "STT: Deepgram Nova-3  →  "
-            "LLM: NVIDIA NIM Llama 3.3 70B (H100, ~388ms)  →  "
-            "TTS: Cartesia Sonic-2 (expressive, <100ms streaming)"
+            "LLM: NVIDIA NIM Llama 3.3 70B (~388ms, smart enough to qualify)  →  "
+            "TTS: Cartesia Sonic-2 (expressive, <100ms streaming). "
+            "Pick this for high-value outbound calls."
         ),
         stt="deepgram-nova-3",
         llm="nvidia-meta/llama-3.3-70b-instruct",
         tts="cartesia-sonic-2",
         badge="default · most human",
     ),
+
+    # ═════════════════════════════════════════════════════════════════
+    # 💰 Volume / Bulk — cheapest LLM, still emotional voice
+    # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="bedrock-novapro-cartesia",
-        label="🇮🇳 Bedrock + Cartesia (emotional, India-routed)",
+        key="volume-bulk",
+        label="💰 Volume / bulk dialing (cheapest, still emotional)",
         description=(
             "STT: Deepgram Nova-3  →  "
-            "LLM: Amazon Nova Pro via Bedrock ap-south-1  →  "
-            "TTS: Cartesia Sonic-2 (expressive, <100ms)"
+            "LLM: Amazon Nova Micro via Bedrock ap-south-1 ($0.03/10k turns)  →  "
+            "TTS: Cartesia Sonic-2 (expressive). "
+            "Pick this when calling 100s of leads — cheapest LLM per turn."
+        ),
+        stt="deepgram-nova-3",
+        llm="bedrock-apac.amazon.nova-micro-v1:0",
+        tts="cartesia-sonic-2",
+        badge="cheapest cloud",
+    ),
+
+    # ═════════════════════════════════════════════════════════════════
+    # 🇮🇳 India-routed — best latency for callers in India
+    # ═════════════════════════════════════════════════════════════════
+    Combo(
+        key="india-routed",
+        label="🇮🇳 India-routed (Mumbai region, balanced)",
+        description=(
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Pro via Bedrock ap-south-1 (~848ms, India-region)  →  "
+            "TTS: Cartesia Sonic-2 (expressive). "
+            "Pick when caller is in India and you want geographic routing."
         ),
         stt="deepgram-nova-3",
         llm="bedrock-apac.amazon.nova-pro-v1:0",
         tts="cartesia-sonic-2",
-        badge="emotional · India",
+        badge="India region",
     ),
 
     # ═════════════════════════════════════════════════════════════════
-    # 🚀 NVIDIA NIM — H100-hosted, fastest from this network (~388ms)
+    # 🧠 Smart / Qualification — best LLM for complex B2B conversations
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="nvidia-llama-70b",
-        label="🚀 NVIDIA · Llama 3.3 70B",
+        key="smart-qualification",
+        label="🧠 Smart qualification (Nemotron, NVIDIA-tuned for chat)",
         description=(
             "STT: Deepgram Nova-3  →  "
-            "LLM: NVIDIA NIM Llama 3.3 70B (H100, ~388ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria"
-        ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.3-70b-instruct",
-        tts="deepgram-aura-2-asteria-en",
-        badge="fastest · flat voice",
-    ),
-    Combo(
-        key="nvidia-nemotron-70b",
-        label="🚀 NVIDIA · Nemotron 70B (tuned)",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: NVIDIA NIM Nemotron 70B (NVIDIA-tuned for chat)  →  "
-            "TTS: Deepgram Aura-2 Asteria"
+            "LLM: NVIDIA NIM Nemotron 70B (NVIDIA-tuned for conversational reasoning)  →  "
+            "TTS: Cartesia Sonic-2. "
+            "Pick for B2B / enterprise calls where the agent needs to reason across "
+            "objections, multi-step asks, technical Q&A."
         ),
         stt="deepgram-nova-3",
         llm="nvidia-nvidia/llama-3.1-nemotron-70b-instruct",
-        tts="deepgram-aura-2-asteria-en",
-        badge="NVIDIA-tuned",
-    ),
-    Combo(
-        key="nvidia-llama-8b",
-        label="🚀 NVIDIA · Llama 3.1 8B",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: NVIDIA NIM Llama 3.1 8B  →  "
-            "TTS: Deepgram Aura-2 Asteria"
-        ),
-        stt="deepgram-nova-3",
-        llm="nvidia-meta/llama-3.1-8b-instruct",
-        tts="deepgram-aura-2-asteria-en",
-        badge="cheaper NIM",
+        tts="cartesia-sonic-2",
+        badge="smartest",
     ),
 
     # ═════════════════════════════════════════════════════════════════
-    # 🇮🇳 AWS Bedrock Mumbai (ap-south-1) — geographically closest
+    # ⚡ Fastest cloud — Groq LPUs (EC2-only — blocked on Indian ISPs)
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="bedrock-nova-lite",
-        label="🇮🇳 Bedrock Mumbai · Nova Lite",
+        key="fastest-cloud",
+        label="⚡ Fastest cloud (Groq LPUs — EC2-only)",
         description=(
             "STT: Deepgram Nova-3  →  "
-            "LLM: Amazon Nova Lite via Bedrock ap-south-1 (~812ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. $0.05/10k turns."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-apac.amazon.nova-lite-v1:0",
-        tts="deepgram-aura-2-asteria-en",
-        badge="cheap fast",
-    ),
-    Combo(
-        key="bedrock-nova-pro",
-        label="🇮🇳 Bedrock Mumbai · Nova Pro",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: Amazon Nova Pro via Bedrock ap-south-1 (~848ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. Better reasoning than Lite."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-apac.amazon.nova-pro-v1:0",
-        tts="deepgram-aura-2-asteria-en",
-        badge="balanced",
-    ),
-    Combo(
-        key="bedrock-nova-micro",
-        label="🇮🇳 Bedrock Mumbai · Nova Micro",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: Amazon Nova Micro via Bedrock ap-south-1 (~848ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. $0.03/10k turns — cheapest."
-        ),
-        stt="deepgram-nova-3",
-        llm="bedrock-apac.amazon.nova-micro-v1:0",
-        tts="deepgram-aura-2-asteria-en",
-        badge="cheapest",
-    ),
-
-    # ═════════════════════════════════════════════════════════════════
-    # 🌐 Groq — fastest LLM in the world (~150ms) BUT blocked from
-    # Indian residential ISPs by Cloudflare ASN. Will work once the
-    # worker is deployed to AWS / any non-blocked network.
-    # ═════════════════════════════════════════════════════════════════
-    Combo(
-        key="groq-llama-8b",
-        label="🌐 Groq · Llama 3.1 8B Instant  (EC2-only)",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: Groq Llama 3.1 8B (~150ms — LPU silicon)  →  "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Blocked from Indian ISPs; works once deployed to a cloud VM."
-        ),
-        stt="deepgram-nova-3",
-        llm="groq-llama-3.1-8b-instant",
-        tts="deepgram-aura-2-asteria-en",
-        badge="fastest if unblocked",
-    ),
-    Combo(
-        key="groq-llama-70b",
-        label="🌐 Groq · Llama 3.3 70B Versatile  (EC2-only)",
-        description=(
-            "STT: Deepgram Nova-3  →  "
-            "LLM: Groq Llama 3.3 70B Versatile (~250ms)  →  "
-            "TTS: Deepgram Aura-2 Asteria. "
-            "Blocked from Indian ISPs; works once deployed to a cloud VM."
+            "LLM: Groq Llama 3.3 70B Versatile (~250ms — fastest LLM silicon)  →  "
+            "TTS: Cartesia Sonic-2. "
+            "Pick this when deployed to a cloud VM. Blocked on Indian residential ISPs."
         ),
         stt="deepgram-nova-3",
         llm="groq-llama-3.3-70b-versatile",
-        tts="deepgram-aura-2-asteria-en",
-        badge="EC2-only",
+        tts="cartesia-sonic-2",
+        badge="EC2-only · fastest",
     ),
 
     # ═════════════════════════════════════════════════════════════════
-    # 📦 Local — runs on your machine, no cloud LLM calls
+    # 💎 Voice cloning — premium, your own voice via ElevenLabs
     # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="local-ollama",
-        label="📦 Local · Ollama Llama 3.1 8B",
+        key="voice-cloning",
+        label="💎 Voice cloning (your voice, ElevenLabs paid plan)",
         description=(
             "STT: Deepgram Nova-3  →  "
-            "LLM: Llama 3.1 8B running locally on Ollama  →  "
-            "TTS: Deepgram Aura-2 Asteria. Zero LLM cost, latency = your CPU."
+            "LLM: NVIDIA NIM Llama 3.3 70B  →  "
+            "TTS: ElevenLabs Turbo v2.5 with cloned voice (paid Starter $5/mo). "
+            "Pick this for follow-up calls where the customer expects YOUR voice."
+        ),
+        stt="deepgram-nova-3",
+        llm="nvidia-meta/llama-3.3-70b-instruct",
+        tts="elevenlabs-eleven_turbo_v2_5",
+        badge="paid · cloned voice",
+    ),
+
+    # ═════════════════════════════════════════════════════════════════
+    # 🔒 Privacy / Local LLM — sensitive data, prompts stay on-prem
+    # ═════════════════════════════════════════════════════════════════
+    Combo(
+        key="privacy-local-llm",
+        label="🔒 Privacy mode (local LLM, cloud STT/TTS only)",
+        description=(
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Llama 3.1 8B running on local Ollama (no cloud reasoning)  →  "
+            "TTS: Cartesia Sonic-2. "
+            "Pick this when prompts may contain sensitive customer data — only "
+            "raw audio transits cloud STT/TTS, never the conversation reasoning."
         ),
         stt="deepgram-nova-3",
         llm="ollama-llama3.1:8b-instruct-q4_K_M",
-        tts="deepgram-aura-2-asteria-en",
-        badge="local LLM",
+        tts="cartesia-sonic-2",
+        badge="private LLM",
     ),
+
+    # ═════════════════════════════════════════════════════════════════
+    # 🏃 Budget low-latency — Bedrock Lite + Cartesia, India route
+    # ═════════════════════════════════════════════════════════════════
     Combo(
-        key="local-offline",
-        label="📦 Offline · all-local stack",
+        key="budget-india-fast",
+        label="🏃 Budget India fast (Nova Lite + Cartesia)",
+        description=(
+            "STT: Deepgram Nova-3  →  "
+            "LLM: Amazon Nova Lite via Bedrock ap-south-1 ($0.05/10k turns, ~812ms)  →  "
+            "TTS: Cartesia Sonic-2 (expressive). "
+            "Sweet spot for India ops — faster than Pro, cheap, still emotional."
+        ),
+        stt="deepgram-nova-3",
+        llm="bedrock-apac.amazon.nova-lite-v1:0",
+        tts="cartesia-sonic-2",
+        badge="balanced India",
+    ),
+
+    # ═════════════════════════════════════════════════════════════════
+    # 📦 Offline — air-gapped, zero cloud, lowest quality
+    # ═════════════════════════════════════════════════════════════════
+    Combo(
+        key="offline-airgapped",
+        label="📦 Offline / air-gapped (zero cloud)",
         description=(
             "STT: faster-whisper tiny on CPU  →  "
             "LLM: Qwen2.5 0.5B on Ollama  →  "
-            "TTS: Piper en_US-lessac on CPU. Zero cloud calls."
+            "TTS: Piper en_US-lessac on CPU. "
+            "Pick for demos, air-gapped tests, or when internet is unreliable. "
+            "Quality is intentionally minimal — this is the no-cloud floor."
         ),
         stt="local-whisper-tiny",
         llm="ollama-qwen2.5:0.5b-instruct",
