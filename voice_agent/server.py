@@ -184,6 +184,16 @@ async def api_dial(request: Request):
     """
     Place an outbound call.
 
+    AUTH: requires `X-Vox-Secret: $VOX_SHARED_SECRET` header. Without it,
+    anyone reaching this endpoint over the public internet could trigger
+    paid Twilio calls. NexusAgent's main backend includes the header on
+    every dial it initiates.
+
+    PER-BUSINESS DAILY CALL CAP: enforced via env `VOX_DAILY_CALL_CAP`
+    (default 200). Counted per `business_id` from the request body. A
+    runaway auto-dialer or compromised CSV can't burn the Twilio budget
+    in an hour. Returns 429 when over cap.
+
     Body (JSON):
       {
         "phone":          "+91XXXXXXXXXX",
@@ -202,10 +212,40 @@ async def api_dial(request: Request):
     Returns:
       { "ok": True, "call_sid": "ca-...", "watch_url": "/calls/ca-..." }
     """
+    # ── Auth: shared-secret header ──────────────────────────────────────
+    expected_secret = os.getenv("VOX_SHARED_SECRET", "").strip()
+    if expected_secret:
+        provided = request.headers.get("X-Vox-Secret", "").strip()
+        # Constant-time compare so we don't leak timing about how many
+        # characters of the secret are correct.
+        import hmac
+        if not provided or not hmac.compare_digest(provided, expected_secret):
+            raise HTTPException(403, "missing or invalid X-Vox-Secret header")
+    elif os.getenv("VOX_ALLOW_UNAUTH", "0") != "1":
+        # Production must set the secret. Local dev opts in via VOX_ALLOW_UNAUTH=1.
+        raise HTTPException(
+            500,
+            "VOX_SHARED_SECRET not configured. Set it in env to enable /api/dial. "
+            "For local dev only, set VOX_ALLOW_UNAUTH=1.",
+        )
+
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(400, "body must be JSON")
+
+    # ── Per-business daily call cap ─────────────────────────────────────
+    biz_id_for_cap = (body.get("business_id") or "").strip()
+    if biz_id_for_cap:
+        cap = int(os.getenv("VOX_DAILY_CALL_CAP", "200"))
+        from voice_agent import leads as _leads_mod
+        used = _leads_mod.calls_today(biz_id_for_cap)
+        if cap > 0 and used >= cap:
+            raise HTTPException(
+                429,
+                f"daily call cap reached for business {biz_id_for_cap} ({used}/{cap}). "
+                f"Bump VOX_DAILY_CALL_CAP or wait for reset at midnight UTC.",
+            )
 
     # E.164 requires no spaces / dashes / parens — strip all formatting.
     # The UI sometimes passes "+91 94832 40597" which Twilio's SIP rejects silently.
@@ -227,6 +267,18 @@ async def api_dial(request: Request):
 
     call_id = f"ca-{uuid.uuid4().hex[:14]}"
     room_name = f"call-{call_id}"
+
+    # Record the dial attempt against the daily cap counter BEFORE dispatch.
+    # We count attempts (not successes) so a flapping LiveKit can't be used
+    # to bypass the cap by retrying.
+    if biz_id_for_cap:
+        from voice_agent import leads as _leads_mod
+        try:
+            _leads_mod.record_call(biz_id_for_cap, call_id, phone)
+        except Exception as e:
+            # Logging only — don't fail the call on a counter write hiccup.
+            from loguru import logger as _log
+            _log.warning(f"[dial-cap] record_call failed: {e}")
 
     # Job metadata — picked up by the agent worker on dispatch.
     metadata = {

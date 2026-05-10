@@ -73,10 +73,60 @@ def _conn() -> sqlite3.Connection:
         "INSERT OR IGNORE INTO queue_state (id, running, updated_at) VALUES (1, 0, ?)",
         (_now(),),
     )
+    # Audit log of every outbound dial — used by /api/dial cap enforcement
+    # and by ops to spot a runaway auto-dialer. One row per call attempt
+    # regardless of success/failure (we want to count the *Twilio billing
+    # event* even if the call never connected).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS call_log (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            business_id   TEXT NOT NULL,
+            call_id       TEXT,
+            phone         TEXT,
+            dialed_at     TEXT NOT NULL
+        )
+    """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_status ON leads(status, created_at)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_leads_bucket ON leads(bucket, completed_at DESC)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_call_log_biz_day "
+                 "ON call_log(business_id, dialed_at)")
     conn.commit()
     return conn
+
+
+def record_call(business_id: str, call_id: str, phone: str) -> None:
+    """Append one row to the call_log. Called from /api/dial right before
+    LiveKit dispatch so caps fire even if the dial itself errors after."""
+    conn = _conn()
+    try:
+        conn.execute(
+            "INSERT INTO call_log (business_id, call_id, phone, dialed_at) "
+            "VALUES (?, ?, ?, ?)",
+            (business_id or "_unknown", call_id or "", phone or "", _now()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def calls_today(business_id: str) -> int:
+    """How many calls have been dialed for this business since 00:00 UTC.
+    Used by /api/dial to enforce VOX_DAILY_CALL_CAP."""
+    if not business_id:
+        return 0
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0,
+    ).isoformat()
+    conn = _conn()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) AS n FROM call_log "
+            "WHERE business_id = ? AND dialed_at >= ?",
+            (business_id, today_start),
+        ).fetchone()
+        return int(row["n"]) if row else 0
+    finally:
+        conn.close()
 
 
 # ── Bucketing rules ────────────────────────────────────────────────────────
