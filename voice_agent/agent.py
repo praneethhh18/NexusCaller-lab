@@ -525,19 +525,40 @@ def _system_prompt(meta: dict) -> str:
 
 
 def _greeting(meta: dict) -> str:
+    import random as _r
     agent_name = meta.get("agent_name", "Vox")
     business_name = meta.get("business_name", "Nexus")
     contact_name = meta.get("contact_name", "")
     purpose = meta.get("purpose", "a quick check-in")
+    relationship = (meta.get("relationship") or "unknown").lower()
+
     name_part = (
-        f"is this {contact_name}?"
-        if contact_name and contact_name != "there"
-        else "got a moment?"
+        contact_name if contact_name and contact_name != "there" else None
     )
-    return (
-        f"Hi, this is {agent_name} from {business_name} — calling on a "
-        f"recorded line about {purpose}, {name_part}"
-    )
+
+    # Three slightly different openings, picked at random so back-to-back
+    # demos don't sound canned. Phrasing tuned for a phone-call cadence
+    # (short, conversational, no marketing speak).
+    if relationship == "customer" and name_part:
+        # Returning customer — warm, no need to explain who we are
+        opts = [
+            f"Hey {name_part}, this is {agent_name} from {business_name} — got a sec?",
+            f"Hi {name_part}, {agent_name} here from {business_name}. Quick one — you free to talk?",
+            f"Hey, it's {agent_name} from {business_name}. {name_part}, am I catching you at a good time?",
+        ]
+    elif name_part:
+        # We know who we're calling but no prior relationship
+        opts = [
+            f"Hi, is this {name_part}? It's {agent_name} from {business_name} — quick one about {purpose}.",
+            f"Hey {name_part}, this is {agent_name} from {business_name}. Got a minute? It's about {purpose}.",
+        ]
+    else:
+        # Cold — don't know the name
+        opts = [
+            f"Hi, this is {agent_name} from {business_name} — calling about {purpose}. Who am I speaking with?",
+            f"Hey, {agent_name} here from {business_name}. Got a moment? It's about {purpose}.",
+        ]
+    return _r.choice(opts)
 
 
 # ── SIP answer detection ─────────────────────────────────────────────────
@@ -618,11 +639,6 @@ async def entrypoint(ctx: JobContext):
     # Build the conversational session. min_interruption_words=1 means a
     # confident word triggers barge-in; Krisp filters echo at the audio layer.
     #
-    # We use Silero VAD's default turn detection (no MultilingualModel)
-    # because the latter needs ~100MB of HF model weights downloaded at
-    # runtime which slowed the cold start AND crashed the worker if the
-    # download failed. VAD-based turn detection works perfectly well for
-    # English + Hinglish phone calls.
     # Reuse the VAD weights loaded once in prewarm() — loading per-call
     # causes a 1-2s spike + leaves Silero unable to keep up with realtime
     # input on slower CPUs. Falls back to a fresh load if prewarm was skipped.
@@ -636,12 +652,33 @@ async def entrypoint(ctx: JobContext):
             deactivation_threshold=0.15,
         )
 
+    # ML-based turn detection: predicts end-of-thought from text semantics,
+    # not just silence. Cuts ~200ms off every turn vs pure VAD because it
+    # fires the moment the sentence is "complete enough" rather than waiting
+    # for a silence threshold. Falls back to VAD-only if the model weights
+    # haven't downloaded yet (first cold start) — never blocks the call.
+    # Disable with VOX_ML_TURN_DETECTOR=0 in .env.
+    turn_detector = None
+    if os.getenv("VOX_ML_TURN_DETECTOR", "1") != "0":
+        try:
+            from livekit.plugins.turn_detector.multilingual import MultilingualModel
+            turn_detector = MultilingualModel()
+            logger.info("[vox] ML turn detector enabled (MultilingualModel)")
+        except Exception as e:
+            logger.warning(
+                f"[vox] ML turn detector unavailable, falling back to VAD-only: {e}"
+            )
+
     # Use the v2-style TurnHandlingOptions API. This replaces the deprecated
     # min_endpointing_delay / allow_interruptions / min_interruption_*
     # constructor args, and unlocks `preemptive_tts` which starts TTS
     # generation BEFORE the turn is confirmed — typically ~300ms latency win
     # on top of the snappier endpointing.
-    session = AgentSession(
+    # AgentSession kwargs are split out so we can conditionally add the ML
+    # turn detector without duplicating the rest. preemptive_tts is now ON
+    # because Groq / NIM / Bedrock all have generous quotas (SambaNova
+    # rate limit was the reason it was off — switched providers since).
+    _session_kwargs = dict(
         stt=_build_stt(stt_key, keyterms=keyterms),
         llm=_build_llm_with_fallback(llm_key),
         tts=_build_tts(tts_key),
@@ -651,31 +688,34 @@ async def entrypoint(ctx: JobContext):
         turn_handling={
             "endpointing": {
                 "mode": "fixed",
-                "min_delay": 0.2,    # was 0.5 default → ~300ms faster reply
-                "max_delay": 2.0,    # cap dead-air patience
+                "min_delay": 0.15,   # tightened from 0.2 → another ~50ms off
+                "max_delay": 1.5,    # was 2.0 — caller doesn't wait as long
             },
             "interruption": {
                 "enabled": True,
-                "mode": "adaptive",     # ML-based — fewer false positives
-                "min_duration": 0.2,    # was 0.5 default → cuts off agent on shorter interrupts
-                "min_words": 0,         # don't gate on word count
+                "mode": "adaptive",
+                "min_duration": 0.2,
+                "min_words": 0,
                 "discard_audio_if_uninterruptible": True,
                 "resume_false_interruption": True,
                 "false_interruption_timeout": 2.0,
             },
             "preemptive_generation": {
-                # Preemptive LLM (warms up the model on partial transcripts)
-                # is still on — keeps latency low. But preemptive_tts and
-                # high retry counts caused us to burn through SambaNova's
-                # free-tier RPM (~5-10 req/min) by firing 3-4 LLM calls
-                # per user turn.
                 "enabled": True,
-                "preemptive_tts": False,   # don't pre-generate audio — too many LLM calls
-                "max_retries": 1,          # one preemptive attempt per turn (not 3)
+                # preemptive_tts ON: TTS starts generating audio from the
+                # LLM's *speculative* response before the user's turn is
+                # confirmed. Typically saves another 200-300ms on first
+                # audio out. Safe with Groq/Bedrock — both have generous
+                # request quotas (Groq 14.4k/day, Bedrock pay-as-you-go).
+                "preemptive_tts": True,
+                "max_retries": 1,
                 "max_speech_duration": 10.0,
             },
         },
     )
+    if turn_detector is not None:
+        _session_kwargs["turn_detection"] = turn_detector
+    session = AgentSession(**_session_kwargs)
 
     # Transcript collector → also broadcasts to data-channel for cockpit viewers.
     turns: list[dict] = []
@@ -704,10 +744,64 @@ async def entrypoint(ctx: JobContext):
             )
         )
 
+    # ── Backchannels: short "mmhmm/right/gotcha" while caller is still
+    # speaking. Closes the "dead air, is anyone there?" feeling that makes
+    # voice agents sound robotic. We fire one only when the caller has
+    # been talking for ≥ a threshold AND we haven't backchanneled
+    # recently — so it sounds attentive, not interruptive.
+    #
+    # Anything that crashes here MUST NOT break the call — we wrap in
+    # broad try/except. Backchannels are a quality bonus, not load-bearing.
+    _backchannel_enabled = os.getenv("VOX_BACKCHANNELS", "1") != "0"
+    _backchannel_phrases = ["mmhmm.", "right.", "gotcha.", "okay.", "uh-huh.", "yeah."]
+    _backchannel_state = {
+        "last_at": 0.0,            # event-loop time of last backchannel
+        "last_partial_words": 0,   # how many words the user had at last fire
+        "last_phrase": "",         # so we don't repeat the same ack
+    }
+    _BACKCHANNEL_COOLDOWN_S = 3.5     # min seconds between backchannels
+    _BACKCHANNEL_MIN_WORDS  = 9       # only fire after user has said ≥ this many words in current utterance
+    _BACKCHANNEL_DELTA_WORDS = 6      # ...AND has added ≥ this many words since the last backchannel
+
+    async def _fire_backchannel():
+        try:
+            import random as _r
+            choices = [p for p in _backchannel_phrases if p != _backchannel_state["last_phrase"]]
+            phrase = _r.choice(choices or _backchannel_phrases)
+            _backchannel_state["last_phrase"] = phrase
+            # add_to_chat_ctx=False → the backchannel doesn't pollute the
+            # LLM's view of the conversation. allow_interruptions=True →
+            # if the caller keeps talking right through it, Vox stops.
+            session.say(phrase, allow_interruptions=True, add_to_chat_ctx=False)
+        except Exception as e:
+            logger.debug(f"[vox] backchannel fire failed (non-fatal): {e}")
+
     @session.on("user_input_transcribed")
     def _on_user(event):
         if getattr(event, "is_final", True):
             _record_and_broadcast("user", event.transcript)
+            # Reset backchannel state on turn end
+            _backchannel_state["last_partial_words"] = 0
+            return
+
+        # Partial / interim transcript — candidate for a backchannel.
+        if not _backchannel_enabled:
+            return
+        try:
+            text = (getattr(event, "transcript", "") or "").strip()
+            if not text:
+                return
+            words_now = len(text.split())
+            now = asyncio.get_event_loop().time()
+            cooldown_ok = (now - _backchannel_state["last_at"]) >= _BACKCHANNEL_COOLDOWN_S
+            grew_enough = (words_now - _backchannel_state["last_partial_words"]) >= _BACKCHANNEL_DELTA_WORDS
+            big_enough  = words_now >= _BACKCHANNEL_MIN_WORDS
+            if cooldown_ok and grew_enough and big_enough:
+                _backchannel_state["last_at"] = now
+                _backchannel_state["last_partial_words"] = words_now
+                asyncio.create_task(_fire_backchannel())
+        except Exception as e:
+            logger.debug(f"[vox] backchannel decision failed (non-fatal): {e}")
 
     @session.on("conversation_item_added")
     def _on_item(event):
