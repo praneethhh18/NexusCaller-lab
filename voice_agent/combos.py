@@ -184,6 +184,52 @@ PRESETS: list[Combo] = [
     ),
 
     # ═══════════════════════════════════════════════════════════════════
+    # ⚡ SPEED ALL-GROQ — Groq's LPU silicon gives the fastest LLM hop
+    # of any provider here. Historically blocked by Cloudflare on Indian
+    # residential ISPs — user is testing whether their current ISP/key
+    # combo gets through. If it does, this is the fastest combo on the
+    # whole list.
+    # ═══════════════════════════════════════════════════════════════════
+    Combo(
+        key="speed-allgroq",
+        label="⚡ Speed all-Groq (test if your ISP allows it)",
+        description=(
+            "STT: Groq Whisper Large-v3 (~150ms)  →  "
+            "LLM: Groq Llama 3.3 70B Versatile (~250ms LPU silicon)  →  "
+            "TTS: ElevenLabs Flash v2.5 (fastest premium TTS). "
+            "If Groq isn't blocked on your network, this is the fastest combo here. "
+            "If it fails with a connection error, your ISP is on Cloudflare's blocklist — "
+            "use one of the other combos."
+        ),
+        stt="groq-whisper-large-v3",
+        llm="groq-llama-3.3-70b-versatile",
+        tts="elevenlabs-eleven_flash_v2_5",
+        badge="fastest if it works",
+        quality="bestest",
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
+    # 🎤 GROQ-STT MIX — keep Groq for STT only (fastest STT we have)
+    # but route LLM through NIM. Some ISPs let Groq's STT through but
+    # block their chat API; this combo tests that.
+    # ═══════════════════════════════════════════════════════════════════
+    Combo(
+        key="groq-stt-mix",
+        label="🎤 Groq STT + NIM LLM + Cartesia",
+        description=(
+            "STT: Groq Whisper Large-v3 (~150ms LPU)  →  "
+            "LLM: NVIDIA NIM Llama 3.3 70B (~388ms)  →  "
+            "TTS: Cartesia Sonic-2. "
+            "Picks Groq's fast STT while keeping the LLM on a provider that always works."
+        ),
+        stt="groq-whisper-large-v3",
+        llm="nvidia-meta/llama-3.3-70b-instruct",
+        tts="cartesia-sonic-2",
+        badge="if Groq works",
+        quality="best",
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
     # 🔒 PRIVACY HYBRID — audio reasoning never leaves the box.
     # Needs `ollama serve` running locally. Skipped if Ollama is offline.
     # ═══════════════════════════════════════════════════════════════════
@@ -214,6 +260,8 @@ STT_OPTIONS = [
      "group": "Cloud — Deepgram"},
     {"key": "deepgram-nova-2",        "label": "Deepgram · Nova-2  (older, cheaper)",
      "group": "Cloud — Deepgram"},
+    {"key": "groq-whisper-large-v3",  "label": "Groq · Whisper Large-v3  (~150ms · test if your ISP allows)",
+     "group": "Cloud — Groq (test if reachable)"},
     {"key": "local-whisper-tiny",     "label": "Local · Whisper tiny  (CPU, offline)",
      "group": "Local — Whisper"},
     {"key": "local-whisper-base",     "label": "Local · Whisper base  (slower, more accurate)",
@@ -248,6 +296,13 @@ LLM_OPTIONS = [
     {"key": "bedrock-mistral.ministral-3-14b-instruct",
         "label": "Mistral Ministral 14B  · same model as the chat app",
         "group": "🌐 Bedrock US (us-east-1)"},
+    # Groq — fastest LPU silicon. Blocked on some Indian residential ISPs.
+    {"key": "groq-llama-3.3-70b-versatile",
+        "label": "Llama 3.3 70B Versatile  · ~250ms (test if your ISP allows)",
+        "group": "⚡ Groq (test if reachable)"},
+    {"key": "groq-llama-3.1-8b-instant",
+        "label": "Llama 3.1 8B Instant  · ~150ms (test if your ISP allows)",
+        "group": "⚡ Groq (test if reachable)"},
     # Local Ollama — only useful if `ollama serve` is running
     {"key": "ollama-llama3.1:8b-instruct-q4_K_M",
         "label": "Llama 3.1 8B  (needs Ollama running)",
