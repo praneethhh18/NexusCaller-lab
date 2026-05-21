@@ -67,7 +67,6 @@ def _looks_like_tool_json(text: str) -> bool:
     s = (text or "").strip()
     if not s:
         return False
-    # Strip code fences first
     cleaned = _CODE_FENCE_RE.sub("", s).strip()
     if cleaned.startswith("{") and cleaned.endswith("}"):
         if any(k in cleaned for k in _ACTION_KEYS):
@@ -77,34 +76,44 @@ def _looks_like_tool_json(text: str) -> bool:
 
 def _strip_tool_json(text: str) -> str:
     """Remove fenced code blocks + bare JSON objects that look like tool
-    envelopes from a chunk. Returns whatever non-JSON prose remains."""
+    envelopes from a chunk. CRITICALLY: must preserve all surrounding
+    whitespace — LLMs stream words as separate chunks ("Hello", " ", "world")
+    and stripping the lone-space chunks concatenates words into gibberish
+    like 'Helloworld'. Only the JSON itself is removed; spaces stay."""
     if not text:
         return text
-    # Strip code fences containing JSON
     out = _CODE_FENCE_RE.sub("", text)
-    # Strip JSON objects that mention action/tool/parameters
     out = _JSON_OBJECT_RE.sub(
         lambda m: "" if any(k in m.group(0) for k in _ACTION_KEYS) else m.group(0),
         out,
     )
-    return out.strip()
+    return out  # NO .strip() — spaces between word-chunks are sacred
 
 
 async def _safe_tts_stream(text_stream):
     """Wrap an async-iter of text chunks so anything that looks like a tool
-    JSON envelope never reaches the TTS plugin. Yields only spoken prose."""
+    JSON envelope never reaches the TTS plugin. Yields prose chunks as-is
+    (including whitespace) so streamed words don't get jammed together."""
     async for chunk in text_stream:
-        # Each chunk can be a string or a ChatChunk-like object; LiveKit's
-        # tts_node hands us strings. Defensive against both.
         text = chunk if isinstance(chunk, str) else getattr(chunk, "text", "") or str(chunk)
+        if text is None:
+            continue
+        # Pass empty strings + whitespace through unchanged — those ARE
+        # the word separators in a streaming token stream. The previous
+        # `if not text: continue` dropped every space chunk and produced
+        # transcripts like "Howisyourday" / "Noproblemhaveagreatday".
         if not text:
+            yield text
             continue
-        if _looks_like_tool_json(text):
-            # Whole chunk is a tool envelope — drop it silently.
+        # Only do the expensive JSON-envelope check on chunks big enough
+        # to potentially contain one. Single-character / whitespace chunks
+        # pass straight through.
+        if len(text) > 8 and _looks_like_tool_json(text):
             continue
-        cleaned = _strip_tool_json(text)
-        if cleaned:
-            yield cleaned
+        if "{" in text:
+            yield _strip_tool_json(text)
+        else:
+            yield text
 
 
 # ── Fallback LLM wrapper ─────────────────────────────────────────────────
