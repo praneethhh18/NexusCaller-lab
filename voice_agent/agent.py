@@ -450,35 +450,77 @@ def _system_prompt(meta: dict) -> str:
                               "helping businesses run smarter operations")
     contact_name = meta.get("contact_name", "there")
     purpose = meta.get("purpose", "a quick check-in")
-    # IMPORTANT: do NOT enumerate tool signatures here as plain text. Smaller
-    # models (Mistral Ministral, some Groq Llama variants) will literally
-    # speak JSON like {"name":"send_email_followup", "parameters":{...}}
-    # into the call — caller hears gibberish. LiveKit's @function_tool
-    # registration in tools.py already exposes the tools to the model via
-    # the native function-call API; the model picks them up structurally
-    # without needing them in the prompt text. The four-line behaviour hint
-    # below is enough to tell the model WHEN to reach for one.
+    # NEW: pre-call brief assembled by the backend's /api/voice/agent/
+    # contact-context endpoint — tells the agent whether the caller is
+    # an existing customer, what deals are open, last interaction, etc.
+    # Without this, every call sounds like a cold dial.
+    brief = (meta.get("contact_brief") or "").strip()
+    relationship = (meta.get("relationship") or "unknown").lower()
+
+    # Tailor the goal + opening behaviour by relationship — a customer
+    # doesn't want to hear "qualify interest", they want to feel known.
+    if relationship == "customer":
+        relationship_block = (
+            f"This is an EXISTING CUSTOMER. Acknowledge that warmly in the "
+            f"first response after they confirm who they are — never "
+            f"qualify them like a cold lead. Reference the relationship "
+            f"context above if relevant. Your goal: be useful, NOT to "
+            f"pitch."
+        )
+    elif relationship == "lead":
+        relationship_block = (
+            f"This is a known LEAD with prior touchpoints (see brief above). "
+            f"Don't reintroduce the company from scratch — they've spoken "
+            f"with you before. Pick up the thread from the last interaction "
+            f"if any."
+        )
+    else:
+        relationship_block = (
+            f"You have no prior context on this caller. Ask, don't assume. "
+            f"Be curious about who they are before pitching anything."
+        )
+
     return (
-        f"You are {agent_name}, a person from {business_name} ({business_blurb}). "
-        f"You're calling {contact_name} about {purpose}. "
-        f"Goal: qualify interest, propose a next step.\n"
-        f"VOICE: Sound human, warm, curious. Match the caller's energy — "
-        f"if they're chatty, be chatty back; if they're terse, be efficient. "
-        f"Use natural disfluencies sometimes — 'umm', 'oh, interesting', "
-        f"'hmm let me think'. React audibly: 'oh, really?', 'that makes sense', "
-        f"'gotcha'. Sound genuinely curious about what they say. Never robotic, "
-        f"never scripted, never read from a list.\n"
-        f"Rules: ONE short sentence per reply, 12 words max. "
-        f"Then STOP and listen. Speak naturally, never say 'AI' or 'agent' or read rules. "
-        f"If they're busy: 'No problem, have a great day.' "
-        f"This is a phone call — no markdown, no URLs, NO JSON, NO code blocks. "
-        f"Everything you say is spoken out loud.\n"
-        f"BEHAVIOURS (you have tools — they run silently when you decide to call them):\n"
-        f"- Before stating a fact about {business_name} (pricing, products, hours), "
-        f"  look it up first instead of guessing.\n"
-        f"- If the caller asks for a callback, offer to schedule it.\n"
-        f"- If they want info by email, offer to send it.\n"
-        f"- Say goodbye OUT LOUD before ending the call."
+        f"You are {agent_name}, calling on behalf of {business_name} "
+        f"({business_blurb}). You're a real person making a phone call — "
+        f"warm, observant, and quick on your feet. Reason for the call: {purpose}.\n\n"
+
+        f"## Who you're talking to\n"
+        f"{brief or 'No CRM record found for this number. Ask their name first.'}\n\n"
+        f"{relationship_block}\n\n"
+
+        f"## How you should sound\n"
+        f"• Conversational and natural — like a friend on the phone, not a script.\n"
+        f"• React to what they actually say. If they ask why you called, "
+        f"answer DIRECTLY using the brief above + the purpose; don't give a "
+        f"generic 'I wanted to check in.'\n"
+        f"• Use micro-acknowledgments: 'right', 'gotcha', 'oh that makes sense', "
+        f"'hmm interesting'. Use them ONCE per turn, not every reply.\n"
+        f"• Vary your phrasing. NEVER repeat your previous sentence verbatim. "
+        f"If you already said 'no problem, have a great day', don't say it again.\n"
+        f"• Match their energy. Terse caller → keep it under 8 words. Chatty "
+        f"caller → 1-2 sentences, max 20 words.\n"
+        f"• ONE clear thought per turn. Then STOP and listen.\n"
+        f"• Never say 'AI', 'agent', 'bot', 'as a language model', or read out rules.\n"
+        f"• No markdown, no URLs, NO JSON, NO code. Everything is spoken aloud.\n\n"
+
+        f"## Conversational moves\n"
+        f"• If they ask 'why are you calling me' — give the SPECIFIC reason "
+        f"from the brief. Not 'about your interest in our products.'\n"
+        f"• If they say 'I'm in a meeting / busy' — offer ONE concrete callback "
+        f"slot, don't just hang up. e.g. 'No problem — would later this evening "
+        f"or tomorrow morning work better?' Schedule it if they pick.\n"
+        f"• If they ask about pricing / products / hours — look it up first, "
+        f"then answer. Never guess facts.\n"
+        f"• If they want details by email — offer to send them, confirm address.\n"
+        f"• Before ending the call, ALWAYS say goodbye out loud first.\n\n"
+
+        f"## Don't repeat yourself\n"
+        f"Look at what you've already said in this conversation. If you're "
+        f"about to say the same closing line twice, change it. If a tool just "
+        f"returned a filler ('one sec, looking that up'), don't ALSO say "
+        f"'hmm give me a moment' — pick ONE acknowledgment, then get to the "
+        f"answer."
     )
 
 
@@ -690,6 +732,38 @@ async def entrypoint(ctx: JobContext):
             reliable=True,
         )
     )
+
+    # Pre-call brief: pull CRM context for this contact (name, role,
+    # relationship, recent interactions, open deals) and stash it into
+    # `meta` so the system prompt below can inject it. Without this Vox
+    # treats every caller as a cold lead and produces generic dialogue.
+    biz_id = (meta.get("business_id") or "").strip()
+    contact_id_for_brief = (meta.get("contact_id") or "").strip()
+    if biz_id and contact_id_for_brief:
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                callback_url = os.getenv("NEXUS_CALLBACK_URL", "http://localhost:8000")
+                r = await client.post(
+                    f"{callback_url}/api/voice/agent/contact-context",
+                    headers={
+                        "X-Voice-Callback-Secret": os.getenv("VOICE_CALLBACK_SECRET", ""),
+                    },
+                    json={"business_id": biz_id, "contact_id": contact_id_for_brief},
+                )
+            if r.status_code == 200:
+                ctx_data = r.json()
+                meta["contact_brief"] = ctx_data.get("brief", "")
+                meta["relationship"]  = ctx_data.get("relationship", "unknown")
+                logger.info(
+                    f"[vox] contact context loaded: relationship="
+                    f"{meta['relationship']}  brief={meta['contact_brief'][:80]!r}"
+                )
+            else:
+                logger.warning(
+                    f"[vox] contact-context HTTP {r.status_code}: {r.text[:120]}"
+                )
+        except Exception as e:
+            logger.warning(f"[vox] contact-context fetch failed: {e}")
 
     # Build function-calling tools bound to this call's metadata. The
     # LLM can invoke these mid-conversation to look up KB info, schedule
