@@ -51,8 +51,24 @@ def build_tools(*, business_id: str, contact_id: str, call_sid: str) -> list:
         claim about the business. Returns a short text summary you can
         quote back to the caller naturally."""
         logger.info(f"[tool:lookup_business_info] query={query!r}")
+        # Speak a filler phrase IMMEDIATELY so the caller hears we're
+        # working — avoids the dead-air feeling while we round-trip to
+        # the RAG backend. Picked from a short, natural set so it doesn't
+        # sound robotic on repeated calls.
         try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
+            import random as _r
+            await ctx.session.say(
+                _r.choice([
+                    "Let me check that for you.",
+                    "One sec, looking that up.",
+                    "Hmm, give me a moment.",
+                ]),
+                allow_interruptions=True,
+            )
+        except Exception:
+            pass
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
                 r = await client.post(
                     _nexus_url("/api/voice/agent/rag-query"),
                     headers=_nexus_headers(),
@@ -83,7 +99,7 @@ def build_tools(*, business_id: str, contact_id: str, call_sid: str) -> list:
         calling this tool."""
         logger.info(f"[tool:schedule_callback] when={when_iso} reason={reason!r}")
         try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:
                 r = await client.post(
                     _nexus_url("/api/voice/agent/schedule-callback"),
                     headers=_nexus_headers(),
@@ -116,7 +132,7 @@ def build_tools(*, business_id: str, contact_id: str, call_sid: str) -> list:
         that the email will go out shortly."""
         logger.info(f"[tool:send_email_followup] subject={subject!r}")
         try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
+            async with httpx.AsyncClient(timeout=3.0) as client:
                 r = await client.post(
                     _nexus_url("/api/voice/agent/send-email"),
                     headers=_nexus_headers(),

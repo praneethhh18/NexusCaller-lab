@@ -45,6 +45,68 @@ from voice_agent.tools import build_tools
 load_dotenv()
 
 
+# ── Safety filter: never let JSON envelopes reach TTS ───────────────────────
+# Smaller LLMs (Mistral Ministral, some Groq Llama variants) occasionally
+# emit tool calls as inline text — e.g.
+#     {"name":"send_email_followup","parameters":{"subject":"..."}}
+# — instead of using the native function-call API. The TTS pipeline then
+# speaks the raw JSON aloud to the caller (real bug observed on live calls).
+# This filter strips obvious JSON / code-fence content out of the stream
+# before it reaches the TTS plugin. If a chunk is ONLY JSON, it's dropped
+# entirely so the agent stays silent for that turn (LiveKit will trigger
+# the real tool via the structured path anyway).
+import re as _re
+
+_JSON_OBJECT_RE = _re.compile(r"\{[\s\S]*?\}")
+_CODE_FENCE_RE  = _re.compile(r"```[a-zA-Z]*\n?[\s\S]*?```", _re.MULTILINE)
+_ACTION_KEYS = ('"action"', '"tool"', '"name"', '"parameters"', '"arguments"')
+
+
+def _looks_like_tool_json(text: str) -> bool:
+    """Heuristic: text mostly consists of a JSON object that names a tool."""
+    s = (text or "").strip()
+    if not s:
+        return False
+    # Strip code fences first
+    cleaned = _CODE_FENCE_RE.sub("", s).strip()
+    if cleaned.startswith("{") and cleaned.endswith("}"):
+        if any(k in cleaned for k in _ACTION_KEYS):
+            return True
+    return False
+
+
+def _strip_tool_json(text: str) -> str:
+    """Remove fenced code blocks + bare JSON objects that look like tool
+    envelopes from a chunk. Returns whatever non-JSON prose remains."""
+    if not text:
+        return text
+    # Strip code fences containing JSON
+    out = _CODE_FENCE_RE.sub("", text)
+    # Strip JSON objects that mention action/tool/parameters
+    out = _JSON_OBJECT_RE.sub(
+        lambda m: "" if any(k in m.group(0) for k in _ACTION_KEYS) else m.group(0),
+        out,
+    )
+    return out.strip()
+
+
+async def _safe_tts_stream(text_stream):
+    """Wrap an async-iter of text chunks so anything that looks like a tool
+    JSON envelope never reaches the TTS plugin. Yields only spoken prose."""
+    async for chunk in text_stream:
+        # Each chunk can be a string or a ChatChunk-like object; LiveKit's
+        # tts_node hands us strings. Defensive against both.
+        text = chunk if isinstance(chunk, str) else getattr(chunk, "text", "") or str(chunk)
+        if not text:
+            continue
+        if _looks_like_tool_json(text):
+            # Whole chunk is a tool envelope — drop it silently.
+            continue
+        cleaned = _strip_tool_json(text)
+        if cleaned:
+            yield cleaned
+
+
 # ── Fallback LLM wrapper ─────────────────────────────────────────────────
 class _FallbackLLM(_lk_llm.LLM):
     """An LLM that tries each provider in order, falling back to the next
@@ -379,6 +441,14 @@ def _system_prompt(meta: dict) -> str:
                               "helping businesses run smarter operations")
     contact_name = meta.get("contact_name", "there")
     purpose = meta.get("purpose", "a quick check-in")
+    # IMPORTANT: do NOT enumerate tool signatures here as plain text. Smaller
+    # models (Mistral Ministral, some Groq Llama variants) will literally
+    # speak JSON like {"name":"send_email_followup", "parameters":{...}}
+    # into the call — caller hears gibberish. LiveKit's @function_tool
+    # registration in tools.py already exposes the tools to the model via
+    # the native function-call API; the model picks them up structurally
+    # without needing them in the prompt text. The four-line behaviour hint
+    # below is enough to tell the model WHEN to reach for one.
     return (
         f"You are {agent_name}, a person from {business_name} ({business_blurb}). "
         f"You're calling {contact_name} about {purpose}. "
@@ -392,13 +462,14 @@ def _system_prompt(meta: dict) -> str:
         f"Rules: ONE short sentence per reply, 12 words max. "
         f"Then STOP and listen. Speak naturally, never say 'AI' or 'agent' or read rules. "
         f"If they're busy: 'No problem, have a great day.' "
-        f"This is a phone call — no markdown, no URLs.\n"
-        f"TOOLS you can use silently:\n"
-        f"- lookup_business_info(query): use BEFORE making any factual claim about "
-        f"  {business_name} (pricing, products, hours). Don't invent facts.\n"
-        f"- schedule_callback(when_iso, reason): when caller asks to be called back.\n"
-        f"- send_email_followup(subject, body): when caller asks for info via email.\n"
-        f"- end_call(reason): only AFTER you said goodbye out loud."
+        f"This is a phone call — no markdown, no URLs, NO JSON, NO code blocks. "
+        f"Everything you say is spoken out loud.\n"
+        f"BEHAVIOURS (you have tools — they run silently when you decide to call them):\n"
+        f"- Before stating a fact about {business_name} (pricing, products, hours), "
+        f"  look it up first instead of guessing.\n"
+        f"- If the caller asks for a callback, offer to schedule it.\n"
+        f"- If they want info by email, offer to send it.\n"
+        f"- Say goodbye OUT LOUD before ending the call."
     )
 
 
@@ -619,7 +690,19 @@ async def entrypoint(ctx: JobContext):
         contact_id=meta.get("contact_id", ""),
         call_sid=call_id,
     )
-    agent = Agent(instructions=_system_prompt(meta), tools=tools)
+    # Subclass Agent to inject a JSON-envelope filter between LLM and TTS.
+    # Otherwise weak models leak tool calls into the audio stream.
+    class _SafeAgent(Agent):
+        async def tts_node(self, text, model_settings):
+            base = super().tts_node(_safe_tts_stream(text), model_settings)
+            async for frame in base:
+                yield frame
+        async def transcription_node(self, text, model_settings):
+            base = super().transcription_node(_safe_tts_stream(text), model_settings)
+            async for chunk in base:
+                yield chunk
+
+    agent = _SafeAgent(instructions=_system_prompt(meta), tools=tools)
     await session.start(agent=agent, room=ctx.room)
 
     # Greet AFTER the SIP participant actually joins the room AND the audio
