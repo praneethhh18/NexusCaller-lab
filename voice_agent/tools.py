@@ -41,6 +41,10 @@ def build_tools(*, business_id: str, contact_id: str, call_sid: str) -> list:
     """Return the list of @function_tool callables bound to this call's
     metadata. Called once per job from agent.py:entrypoint()."""
 
+    # Per-call state so a back-to-back tool fires don't say the same
+    # filler twice in a row (the "One sec, looking that up." x2 bug).
+    _filler_state = {"last_at": 0.0, "last_phrase": ""}
+
     @function_tool
     async def lookup_business_info(
         ctx: RunContext,
@@ -51,24 +55,28 @@ def build_tools(*, business_id: str, contact_id: str, call_sid: str) -> list:
         claim about the business. Returns a short text summary you can
         quote back to the caller naturally."""
         logger.info(f"[tool:lookup_business_info] query={query!r}")
-        # Speak a filler phrase IMMEDIATELY so the caller hears we're
-        # working — avoids the dead-air feeling while we round-trip to
-        # the RAG backend. Picked from a short, natural set so it doesn't
-        # sound robotic on repeated calls.
+        # Filler phrase: speak ONLY if we haven't said one in the last 6s,
+        # AND only on the first tool call of a turn. Otherwise we get
+        # "One sec, looking that up." back-to-back which sounds broken.
         try:
-            import random as _r
-            await ctx.session.say(
-                _r.choice([
+            import asyncio as _aio, random as _r
+            now = _aio.get_event_loop().time()
+            if (now - _filler_state["last_at"]) >= 6.0:
+                candidates = [
                     "Let me check that for you.",
                     "One sec, looking that up.",
                     "Hmm, give me a moment.",
-                ]),
-                allow_interruptions=True,
-            )
+                ]
+                # Avoid using the same phrase twice in a row even after cooldown
+                candidates = [c for c in candidates if c != _filler_state["last_phrase"]]
+                phrase = _r.choice(candidates) if candidates else "One sec."
+                _filler_state["last_at"] = now
+                _filler_state["last_phrase"] = phrase
+                await ctx.session.say(phrase, allow_interruptions=True, add_to_chat_ctx=False)
         except Exception:
             pass
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
+            async with httpx.AsyncClient(timeout=6.0) as client:
                 r = await client.post(
                     _nexus_url("/api/voice/agent/rag-query"),
                     headers=_nexus_headers(),
@@ -99,7 +107,7 @@ def build_tools(*, business_id: str, contact_id: str, call_sid: str) -> list:
         calling this tool."""
         logger.info(f"[tool:schedule_callback] when={when_iso} reason={reason!r}")
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
+            async with httpx.AsyncClient(timeout=6.0) as client:
                 r = await client.post(
                     _nexus_url("/api/voice/agent/schedule-callback"),
                     headers=_nexus_headers(),
@@ -132,7 +140,7 @@ def build_tools(*, business_id: str, contact_id: str, call_sid: str) -> list:
         that the email will go out shortly."""
         logger.info(f"[tool:send_email_followup] subject={subject!r}")
         try:
-            async with httpx.AsyncClient(timeout=3.0) as client:
+            async with httpx.AsyncClient(timeout=6.0) as client:
                 r = await client.post(
                     _nexus_url("/api/voice/agent/send-email"),
                     headers=_nexus_headers(),
