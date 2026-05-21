@@ -184,6 +184,30 @@ PRESETS: list[Combo] = [
     ),
 
     # ═══════════════════════════════════════════════════════════════════
+    # 🚀 DEEPGRAM + GROQ + DEEPGRAM — best speed-per-rupee
+    # Deepgram Nova-3 STT (best Indian English) + Groq Llama 3.3 70B LLM
+    # (~250ms LPU silicon) + Deepgram Aura-2 TTS (~$0.015/min, cheapest
+    # premium streaming TTS). Sweet spot when you want Groq's speed but
+    # don't want ElevenLabs' pricing.
+    # ═══════════════════════════════════════════════════════════════════
+    Combo(
+        key="deepgram-groq-deepgram",
+        label="🚀 Deepgram + Groq + Deepgram (cheapest fast combo)",
+        description=(
+            "STT: Deepgram Nova-3 (best Indian English, ~200ms)  →  "
+            "LLM: Groq Llama 3.3 70B Versatile (~250ms LPU)  →  "
+            "TTS: Deepgram Aura-2 Thalia (~300ms, cheapest premium streaming TTS). "
+            "~600-900ms end-to-end. Best speed-per-rupee combo when ElevenLabs "
+            "pricing is too steep but you still want Groq's LLM speed."
+        ),
+        stt="deepgram-nova-3",
+        llm="groq-llama-3.3-70b-versatile",
+        tts="deepgram-aura-2-thalia-en",
+        badge="fast + cheap",
+        quality="best",
+    ),
+
+    # ═══════════════════════════════════════════════════════════════════
     # ⚡ SPEED ALL-GROQ — Groq's LPU silicon gives the fastest LLM hop
     # of any provider here. Historically blocked by Cloudflare on Indian
     # residential ISPs — user is testing whether their current ISP/key
