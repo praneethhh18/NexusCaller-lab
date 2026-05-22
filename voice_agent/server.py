@@ -292,6 +292,11 @@ async def api_dial(request: Request):
                            or "We help businesses run smarter operations.").strip(),
         "agent_name":     (body.get("agent_name") or os.getenv("VOX_AGENT_NAME", "Vox")).strip(),
         "purpose":        (body.get("purpose") or "a quick check-in").strip(),
+        # Language for the agent to speak in. Caller (NexusAgent backend)
+        # passes the business's voice_language setting; falls back to
+        # English when unset. The agent's languages.py expands this to
+        # the right TTS voice, greeting variants, and prompt block.
+        "language":       (body.get("language") or "en").strip().lower(),
         "callback_url":   (body.get("callback_url") or "").strip(),
         "stt":            stt_key,
         "llm":            llm_key,

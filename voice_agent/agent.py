@@ -393,7 +393,19 @@ def _build_llm_with_fallback(primary_key: str) -> _lk_llm.LLM:
     return _FallbackLLM(chain)
 
 
-def _build_tts(key: str):
+def _build_tts(key: str, *, language: str = "en"):
+    """Build the TTS plugin. `language` lets callers override the voice
+    + model when the call is in Hindi/Tamil/Marathi; defaults to whatever
+    the env vars / hardcoded voice ID say (English voice).
+
+    For non-English languages we force the multilingual model variant
+    (Cartesia 'sonic-multilingual', ElevenLabs 'eleven_multilingual_v2')
+    so the same voice ID renders the right language."""
+    from voice_agent.languages import get_profile, CARTESIA_MULTILINGUAL_MODEL
+
+    lang_profile = get_profile(language)
+    is_non_english = lang_profile.code != "en"
+
     if key.startswith("deepgram-"):
         # Deepgram Aura TTS — streaming WebSocket mode. Streaming is
         # required for clean barge-in / interruption: when the user
@@ -411,16 +423,30 @@ def _build_tts(key: str):
         )
     if key.startswith("elevenlabs-"):
         model = key.removeprefix("elevenlabs-")
+        # For non-English, force the multilingual model so the same voice
+        # ID can render Hindi/Tamil/Marathi audio.
+        if is_non_english:
+            model = "eleven_multilingual_v2"
+        voice_id = (
+            lang_profile.elevenlabs_voice_id
+            or os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")
+        )
         return elevenlabs.TTS(
-            voice_id=os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL"),
+            voice_id=voice_id,
             model=model,
             api_key=os.getenv("ELEVENLABS_API_KEY"),
         )
     if key.startswith("cartesia-"):
         model = key.removeprefix("cartesia-")
+        if is_non_english:
+            model = CARTESIA_MULTILINGUAL_MODEL
+        voice_id = (
+            lang_profile.cartesia_voice_id
+            or os.getenv("CARTESIA_VOICE_ID", "f786b574-daa5-4673-aa0c-cbe3e8534c02")
+        )
         return cartesia.TTS(
             api_key=os.getenv("CARTESIA_API_KEY"),
-            voice=os.getenv("CARTESIA_VOICE_ID", "f786b574-daa5-4673-aa0c-cbe3e8534c02"),
+            voice=voice_id,
             model=model,
         )
     if key.startswith("kokoro-"):
@@ -444,6 +470,7 @@ def _build_tts(key: str):
 # emit its first output token as fast as possible. Every line of system
 # prompt costs ~1ms of first-token latency on a 70B model.
 def _system_prompt(meta: dict) -> str:
+    from voice_agent.languages import get_profile
     agent_name = meta.get("agent_name", "Vox")
     business_name = meta.get("business_name", "Nexus")
     business_blurb = meta.get("business_blurb",
@@ -456,6 +483,7 @@ def _system_prompt(meta: dict) -> str:
     # Without this, every call sounds like a cold dial.
     brief = (meta.get("contact_brief") or "").strip()
     relationship = (meta.get("relationship") or "unknown").lower()
+    lang = get_profile(meta.get("language", "en"))
 
     # Tailor the goal + opening behaviour by relationship — a customer
     # doesn't want to hear "qualify interest", they want to feel known.
@@ -484,6 +512,11 @@ def _system_prompt(meta: dict) -> str:
         f"You are {agent_name}, a real person calling on behalf of {business_name}. "
         f"({business_blurb}). Reason for the call: {purpose}.\n\n"
 
+        # Language directive comes FIRST so the LLM emits its first token
+        # in the right language, no "let me switch" stutter.
+        f"## Language\n"
+        f"{lang.speak_instruction}\n\n"
+
         f"## Who you're talking to (use this — don't ignore it)\n"
         f"{brief or 'No CRM record found for this number. Ask their name first.'}\n\n"
         f"{relationship_block}\n"
@@ -502,14 +535,9 @@ def _system_prompt(meta: dict) -> str:
         f"• Everything you produce is spoken — no markdown, no URLs, NO JSON.\n\n"
 
         f"## When the caller is busy\n"
-        f"If they say things like 'make it fast', 'I have a meeting in N minutes', "
-        f"'I'm busy' — DO NOT hang up. Instead:\n"
-        f"  1. Acknowledge it briefly: 'Got it, quick version then.'\n"
-        f"  2. Deliver the SPECIFIC reason from the brief in ONE sentence.\n"
-        f"  3. Ask if they want a callback at a better time, OR an email summary.\n"
+        f"{lang.busy_handler_block}\n"
         f"Only end the call when THEY clearly say goodbye/hang up, OR when both "
-        f"sides agree the conversation is done. Saying 'make it fast' is NOT a "
-        f"hang-up signal — it's a 'be efficient' signal.\n\n"
+        f"sides agree the conversation is done.\n\n"
 
         f"## Tools — use them, don't announce them\n"
         f"• Before any factual claim (pricing, hours, contract terms) — look it up.\n"
@@ -528,40 +556,35 @@ def _system_prompt(meta: dict) -> str:
 
 
 def _greeting(meta: dict) -> str:
+    """Open the call in the configured language. Greeting variants live
+    in voice_agent/languages.py so adding a language doesn't touch the
+    agent flow."""
     import random as _r
-    agent_name = meta.get("agent_name", "Vox")
+    from voice_agent.languages import get_profile
+
+    agent_name   = meta.get("agent_name", "Vox")
     business_name = meta.get("business_name", "Nexus")
     contact_name = meta.get("contact_name", "")
-    purpose = meta.get("purpose", "a quick check-in")
+    purpose      = meta.get("purpose", "a quick check-in")
     relationship = (meta.get("relationship") or "unknown").lower()
+    lang         = get_profile(meta.get("language", "en"))
 
-    name_part = (
-        contact_name if contact_name and contact_name != "there" else None
-    )
+    name_part = contact_name if contact_name and contact_name != "there" else None
 
-    # Three slightly different openings, picked at random so back-to-back
-    # demos don't sound canned. Phrasing tuned for a phone-call cadence
-    # (short, conversational, no marketing speak).
     if relationship == "customer" and name_part:
-        # Returning customer — warm, no need to explain who we are
-        opts = [
-            f"Hey {name_part}, this is {agent_name} from {business_name} — got a sec?",
-            f"Hi {name_part}, {agent_name} here from {business_name}. Quick one — you free to talk?",
-            f"Hey, it's {agent_name} from {business_name}. {name_part}, am I catching you at a good time?",
-        ]
+        opts = lang.greetings_customer
     elif name_part:
-        # We know who we're calling but no prior relationship
-        opts = [
-            f"Hi, is this {name_part}? It's {agent_name} from {business_name} — quick one about {purpose}.",
-            f"Hey {name_part}, this is {agent_name} from {business_name}. Got a minute? It's about {purpose}.",
-        ]
+        opts = lang.greetings_known_lead
     else:
-        # Cold — don't know the name
-        opts = [
-            f"Hi, this is {agent_name} from {business_name} — calling about {purpose}. Who am I speaking with?",
-            f"Hey, {agent_name} here from {business_name}. Got a moment? It's about {purpose}.",
-        ]
-    return _r.choice(opts)
+        opts = lang.greetings_cold
+
+    template = _r.choice(opts)
+    return template.format(
+        name=name_part or "",
+        biz=business_name,
+        agent=agent_name,
+        purpose=purpose,
+    )
 
 
 # ── SIP answer detection ─────────────────────────────────────────────────
@@ -684,7 +707,7 @@ async def entrypoint(ctx: JobContext):
     _session_kwargs = dict(
         stt=_build_stt(stt_key, keyterms=keyterms),
         llm=_build_llm_with_fallback(llm_key),
-        tts=_build_tts(tts_key),
+        tts=_build_tts(tts_key, language=meta.get("language", "en")),
         vad=vad,
         user_away_timeout=None,    # don't auto-end on silence (PSTN can be quiet)
         aec_warmup_duration=0.3,   # short — Twilio outbound has minimal echo
